@@ -351,6 +351,13 @@
   font-weight: 600;
 }
 
+.add-payments-balance .add-payments-balance__error {
+  display: block;
+  color: var(--danger-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .add-payments-footer {
   display: flex;
   align-items: center;

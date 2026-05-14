@@ -55,6 +55,14 @@ class PaymentListResponse(BaseModel):
     items: list[PaymentRow]
 
 
+class BankAccountBalanceResponse(BaseModel):
+    company_bank_account_id: int
+    currency_code: str | None = None
+    balance: Decimal
+    incoming_total: Decimal
+    outgoing_total: Decimal
+
+
 class PaymentDetailResponse(BaseModel):
     id: int
     company_bank_account: BankAccountLookupItem

@@ -377,6 +377,40 @@ async def create_payments_batch(db: AsyncSession, payloads: list[PaymentCreateRe
     return payments
 
 
+async def get_bank_account_balance(db: AsyncSession, company_bank_account_id: int) -> dict:
+    company_bank_account = await db.get(CompanyBankAccount, company_bank_account_id)
+    if company_bank_account is None:
+        raise PaymentValidationError("Company bank account not found")
+
+    incoming_total = (
+        await db.execute(
+            select(func.coalesce(func.sum(Payment.amount_original), 0)).where(
+                Payment.company_bank_account_id == company_bank_account_id,
+                Payment.payment_direction == PaymentDirection.INCOMING,
+            )
+        )
+    ).scalar_one()
+    outgoing_total = (
+        await db.execute(
+            select(func.coalesce(func.sum(Payment.amount_original), 0)).where(
+                Payment.company_bank_account_id == company_bank_account_id,
+                Payment.payment_direction == PaymentDirection.OUTGOING,
+            )
+        )
+    ).scalar_one()
+
+    incoming_total = Decimal(incoming_total)
+    outgoing_total = Decimal(outgoing_total)
+
+    return {
+        "company_bank_account_id": company_bank_account.id,
+        "currency_code": company_bank_account.currency_code,
+        "balance": incoming_total - outgoing_total,
+        "incoming_total": incoming_total,
+        "outgoing_total": outgoing_total,
+    }
+
+
 async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateRequest) -> dict:
     company_bank_account = await db.get(CompanyBankAccount, payload.company_bank_account_id)
     if company_bank_account is None:

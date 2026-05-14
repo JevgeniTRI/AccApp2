@@ -10,6 +10,7 @@ export default function LookupField({
   onTextChange,
   onSelect,
   fetchOptions,
+  fetchOnOpenQuery,
   disabled = false,
   helperText,
 }) {
@@ -19,6 +20,7 @@ export default function LookupField({
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [options, setOptions] = useState([])
+  const [queryOverride, setQueryOverride] = useState(null)
 
   useEffect(() => {
     if (!isOpen || disabled) {
@@ -31,14 +33,20 @@ export default function LookupField({
       setLoadError('')
 
       try {
-        const items = await fetchOptions(textValue.trim())
+        const selectedText = selectedOption?.label || ''
+        const shouldUseOpenQuery =
+          fetchOnOpenQuery !== undefined && selectedText && textValue.trim() === selectedText
+        const query = queryOverride ?? (shouldUseOpenQuery ? fetchOnOpenQuery : textValue.trim())
+        const items = await fetchOptions(query)
         if (!cancelled) {
           setOptions(items)
+          setQueryOverride(null)
         }
       } catch {
         if (!cancelled) {
           setLoadError('Не удалось загрузить список')
           setOptions([])
+          setQueryOverride(null)
         }
       } finally {
         if (!cancelled) {
@@ -51,7 +59,7 @@ export default function LookupField({
       cancelled = true
       window.clearTimeout(timerId)
     }
-  }, [disabled, fetchOptions, isOpen, textValue])
+  }, [disabled, fetchOnOpenQuery, fetchOptions, isOpen, queryOverride, selectedOption, textValue])
 
   useEffect(() => {
     function handlePointerDown(event) {
@@ -74,6 +82,7 @@ export default function LookupField({
 
   function handleInputChange(event) {
     const nextValue = event.target.value
+    setQueryOverride(null)
     if (selectedOption && nextValue !== selectedOption.label) {
       onSelect(null)
     }
@@ -85,6 +94,25 @@ export default function LookupField({
     onSelect(option)
     onTextChange(option.label)
     setIsOpen(false)
+  }
+
+  function openWithDefaultQuery() {
+    if (!isOpen && fetchOnOpenQuery !== undefined) {
+      setQueryOverride(fetchOnOpenQuery)
+    }
+    setIsOpen(true)
+  }
+
+  function handleToggleClick() {
+    if (isOpen) {
+      setIsOpen(false)
+      return
+    }
+
+    if (fetchOnOpenQuery !== undefined) {
+      setQueryOverride(fetchOnOpenQuery)
+    }
+    setIsOpen(true)
   }
 
   return (
@@ -102,7 +130,7 @@ export default function LookupField({
           type="text"
           value={textValue}
           onChange={handleInputChange}
-          onFocus={() => setIsOpen(true)}
+          onFocus={openWithDefaultQuery}
           placeholder={placeholder}
           disabled={disabled}
           autoComplete="off"
@@ -110,7 +138,7 @@ export default function LookupField({
         <button
           type="button"
           className="lookup-field__toggle"
-          onClick={() => setIsOpen((current) => !current)}
+          onClick={handleToggleClick}
           disabled={disabled}
           aria-label={isOpen ? 'Скрыть варианты' : 'Показать варианты'}
         >

@@ -15,7 +15,14 @@ import {
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import LookupField from '../../components/LookupField/LookupField'
-import { buildPaymentAttachmentUrl, createPaymentsBatch, deletePayment, fetchPayment, updatePayment } from '../../lib/api'
+import {
+  buildPaymentAttachmentUrl,
+  createPaymentsBatch,
+  deletePayment,
+  fetchBankAccountBalance,
+  fetchPayment,
+  updatePayment,
+} from '../../lib/api'
 import {
   findLookupOption,
   formatAmount,
@@ -200,6 +207,13 @@ export default function AddPaymentsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isLoadingPayment, setIsLoadingPayment] = useState(isEditMode)
   const [initialEditState, setInitialEditState] = useState(null)
+  const [balanceState, setBalanceState] = useState({
+    isLoading: false,
+    error: '',
+    accountId: null,
+    balance: 0,
+    currencyCode: 'EUR',
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -270,6 +284,59 @@ export default function AddPaymentsPage() {
     }
   }, [isEditMode, paymentId])
 
+  useEffect(() => {
+    const accountId = formState.bankAccount?.value
+    if (!accountId) {
+      setBalanceState({
+        isLoading: false,
+        error: '',
+        accountId: null,
+        balance: 0,
+        currencyCode: formState.bankAccount?.currencyCode || 'EUR',
+      })
+      return undefined
+    }
+
+    let cancelled = false
+    setBalanceState((current) => ({
+      ...current,
+      isLoading: true,
+      error: '',
+      accountId,
+      currencyCode: formState.bankAccount?.currencyCode || current.currencyCode || 'EUR',
+    }))
+
+    async function loadBalance() {
+      try {
+        const data = await fetchBankAccountBalance(accountId)
+        if (!cancelled) {
+          setBalanceState({
+            isLoading: false,
+            error: '',
+            accountId,
+            balance: toNumber(data.balance),
+            currencyCode: data.currency_code || formState.bankAccount?.currencyCode || 'EUR',
+          })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setBalanceState({
+            isLoading: false,
+            error: error.response?.data?.detail || 'Не удалось загрузить остаток счёта',
+            accountId,
+            balance: 0,
+            currencyCode: formState.bankAccount?.currencyCode || 'EUR',
+          })
+        }
+      }
+    }
+
+    loadBalance()
+    return () => {
+      cancelled = true
+    }
+  }, [formState.bankAccount])
+
   const totals = useMemo(() => {
     const incoming = formState.rows.reduce((total, row) => {
       const amount = toNumber(row.amount)
@@ -280,8 +347,11 @@ export default function AddPaymentsPage() {
       return amount < 0 ? total + Math.abs(amount) : total
     }, 0)
 
-    return { incoming, outgoing }
+    return { incoming, outgoing, net: incoming - outgoing }
   }, [formState.rows])
+
+  const projectedBalance = balanceState.balance + totals.net
+  const balanceCurrency = balanceState.currencyCode || formState.bankAccount?.currencyCode || 'EUR'
 
   function updateFormField(name, value) {
     setFormState((current) => ({ ...current, [name]: value }))
@@ -710,6 +780,7 @@ export default function AddPaymentsPage() {
                     }))
                   }
                   fetchOptions={(query) => loadLookup('companyBankAccounts', query)}
+                  fetchOnOpenQuery=""
                   helperText={
                     formState.bankAccount
                       ? `${formState.bankAccount.companyName} / ${formState.bankAccount.bankName} / ${formState.bankAccount.currencyCode}`
@@ -1004,21 +1075,32 @@ export default function AddPaymentsPage() {
             <div className="add-payments-balance">
               <div>
                 <span>Остаток счёта:</span>
-                <strong>не рассчитывается на этой форме</strong>
+                <strong>
+                  {formState.bankAccount
+                    ? balanceState.isLoading
+                      ? 'загрузка...'
+                      : formatAmount(balanceState.balance, balanceCurrency)
+                    : 'выберите счёт компании'}
+                </strong>
               </div>
               <div>
-                <span>Почему:</span>
-                <strong>нужны данные банка и уже проведённые движения</strong>
+                <span>После строк формы:</span>
+                <strong>{formState.bankAccount ? formatAmount(projectedBalance, balanceCurrency) : '-'}</strong>
               </div>
+              {balanceState.error ? <div className="add-payments-balance__error">{balanceState.error}</div> : null}
             </div>
             <div className="add-payments-balance">
               <div>
                 <span>Поступления:</span>
-                <strong>{formatAmount(totals.incoming)}</strong>
+                <strong>{formatAmount(totals.incoming, balanceCurrency)}</strong>
               </div>
               <div>
                 <span>Списания:</span>
-                <strong>{formatAmount(totals.outgoing)}</strong>
+                <strong>{formatAmount(totals.outgoing, balanceCurrency)}</strong>
+              </div>
+              <div>
+                <span>Изменение:</span>
+                <strong>{formatAmount(totals.net, balanceCurrency)}</strong>
               </div>
             </div>
           </div>

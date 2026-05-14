@@ -44,6 +44,11 @@ export async function fetchPayment(paymentId) {
   return data
 }
 
+export async function fetchBankAccountBalance(bankAccountId) {
+  const { data } = await api.get(`/payments/bank-accounts/${bankAccountId}/balance`)
+  return data
+}
+
 export async function createPayment(payload) {
   const { data } = await api.post('/payments', payload)
   return data

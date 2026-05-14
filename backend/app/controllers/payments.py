@@ -12,6 +12,7 @@ from app.models.enums import PaymentDirection
 from app.schemas.payments import (
     PaymentBatchCreateRequest,
     PaymentBatchCreateResponse,
+    BankAccountBalanceResponse,
     PaymentAttachmentSummary,
     PaymentCreateRequest,
     PaymentCreateResponse,
@@ -24,6 +25,7 @@ from app.services.payments import (
     create_payment,
     create_payments_batch,
     delete_payment,
+    get_bank_account_balance,
     get_payment_detail,
     list_payments,
     update_payment,
@@ -126,6 +128,19 @@ async def post_payment(payload: PaymentCreateRequest, db: AsyncSession = Depends
         payment_direction=payment.payment_direction,
         company_bank_account_id=payment.company_bank_account_id,
     )
+
+
+@router.get("/bank-accounts/{company_bank_account_id}/balance", response_model=BankAccountBalanceResponse)
+async def get_payment_bank_account_balance(
+    company_bank_account_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> BankAccountBalanceResponse:
+    try:
+        balance = await get_bank_account_balance(db, company_bank_account_id)
+    except PaymentValidationError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return BankAccountBalanceResponse(**balance)
 
 
 @router.get("/{payment_id}", response_model=PaymentDetailResponse)

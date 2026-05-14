@@ -116,7 +116,7 @@
 
 .banks-table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 720px;
   border-collapse: collapse;
 }
 
@@ -139,29 +139,10 @@
   background: rgba(250, 251, 255, 0.78);
 }
 
-.banks-table__checkbox {
-  width: 38px;
-}
-
-.banks-table__checkbox input {
-  width: 16px;
-  height: 16px;
-}
-
 .banks-table__bank,
 .banks-table__company {
   color: #2964ff;
   font-weight: 600;
-}
-
-.banks-table__actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.banks-table__actions button {
-  color: var(--muted-text);
 }
 
 .banks-table__empty {

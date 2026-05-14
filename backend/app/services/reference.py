@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.banking import Payment
+from app.models.enums import PaymentDirection
 from app.models.reference import Bank, Client, Company, CompanyBankAccount, CompanyContact, Counterparty, Currency
 from app.schemas.reference import (
     BankAccountCreateRequest,
@@ -379,6 +381,30 @@ async def list_bank_account_overview(
 
     result = await db.execute(stmt)
     accounts = list(result.scalars().unique().all())
+    account_ids = [account.id for account in accounts]
+
+    balances_by_account: dict[int, object] = {}
+    if account_ids:
+        balances_result = await db.execute(
+            select(
+                Payment.company_bank_account_id,
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (Payment.payment_direction == PaymentDirection.INCOMING, Payment.amount_original),
+                            else_=-Payment.amount_original,
+                        )
+                    ),
+                    0,
+                ).label("balance"),
+            )
+            .where(Payment.company_bank_account_id.in_(account_ids))
+            .group_by(Payment.company_bank_account_id)
+        )
+        balances_by_account = {
+            row.company_bank_account_id: row.balance
+            for row in balances_result
+        }
 
     items: list[BankAccountOverviewItem] = []
     for account in accounts:
@@ -400,6 +426,7 @@ async def list_bank_account_overview(
                 id=account.id,
                 company_id=company.id if company is not None else None,
                 company_name=format_company_display_name(company) if company is not None else None,
+                company_legal_name=company.legal_name if company is not None else None,
                 bank_id=bank.id,
                 bank_label=format_bank_display_name(bank),
                 bank_full_name=bank.name,
@@ -408,6 +435,7 @@ async def list_bank_account_overview(
                 swift_or_bic=account.bic or bank.swift_code,
                 bank_address=bank_address or None,
                 currency_code=account.currency_code,
+                balance=balances_by_account.get(account.id, 0),
                 is_primary=account.is_primary,
                 is_active=account.is_active,
                 opened_at=account.opened_at,

@@ -55,6 +55,10 @@ class PaymentListResponse(BaseModel):
     items: list[PaymentRow]
 
 
+class PaymentFiltersMetaResponse(BaseModel):
+    earliest_booking_date: date | None = None
+
+
 class BankAccountBalanceResponse(BaseModel):
     company_bank_account_id: int
     currency_code: str | None = None

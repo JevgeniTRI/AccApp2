@@ -157,6 +157,11 @@ async def list_payments(
     return total, rows
 
 
+async def get_earliest_payment_booking_date(db: AsyncSession) -> date | None:
+    result = await db.execute(select(func.min(Payment.booking_date)))
+    return result.scalar_one()
+
+
 async def create_payment(db: AsyncSession, payload: PaymentCreateRequest) -> Payment:
     resolved = await resolve_payment_payload(db, payload)
 

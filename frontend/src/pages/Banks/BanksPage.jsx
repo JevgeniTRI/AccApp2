@@ -1,38 +1,27 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
-  Copy,
   Filter,
-  Pencil,
   Plus,
   RefreshCw,
   Search,
-  Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { fetchBankAccountsOverview, fetchBanksOverview } from '../../lib/api'
 import './BanksPage.css'
 
-function groupItems(items, mode) {
-  const map = new Map()
-
-  for (const item of items) {
-    const key = mode === 'banks' ? item.bank_id : item.company_id
-    const label = mode === 'banks' ? item.bank_label : item.company_name || 'Не привязано'
-    if (!map.has(key)) {
-      map.set(key, { key, label, items: [] })
-    }
-    map.get(key).items.push(item)
-  }
-
-  return [...map.values()]
-}
-
 function formatBalanceLabel(item) {
-  if (!item.currency_code) {
+  if (!item.currency_code || item.balance === null || item.balance === undefined) {
     return '—'
   }
-  return `— ${item.currency_code}`
+
+  const amount = Number(item.balance)
+  const formattedAmount = new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(amount) ? amount : 0)
+
+  return `${formattedAmount} ${item.currency_code}`
 }
 
 function buildRows(accountItems, bankItems) {
@@ -54,6 +43,7 @@ function buildRows(accountItems, bankItems) {
       id: bank.id,
       company_id: null,
       company_name: null,
+      company_legal_name: null,
       bank_id: bank.id,
       bank_label: bank.label,
       bank_full_name: bank.name,
@@ -62,6 +52,7 @@ function buildRows(accountItems, bankItems) {
       swift_or_bic: bank.swift_code,
       bank_address: bank.bank_address,
       currency_code: null,
+      balance: null,
       is_primary: false,
       is_active: true,
       opened_at: null,
@@ -74,7 +65,6 @@ function buildRows(accountItems, bankItems) {
 export default function BanksPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [groupMode, setGroupMode] = useState('banks')
   const [refreshKey, setRefreshKey] = useState(0)
   const [state, setState] = useState({
     isLoading: true,
@@ -134,7 +124,6 @@ export default function BanksPage() {
     () => buildRows(state.accountItems, state.bankItems),
     [state.accountItems, state.bankItems],
   )
-  const groups = useMemo(() => groupItems(rows, groupMode), [groupMode, rows])
 
   return (
     <div className="banks-page">
@@ -178,33 +167,12 @@ export default function BanksPage() {
             <button type="button" className="banks-icon-button" aria-label="Фильтры">
               <Filter size={16} />
             </button>
-
-            <div className="banks-switches">
-              <label className="banks-radio">
-                <span>По компаниям</span>
-                <input
-                  type="radio"
-                  name="group_mode"
-                  checked={groupMode === 'companies'}
-                  onChange={() => setGroupMode('companies')}
-                />
-              </label>
-              <label className="banks-radio">
-                <span>По банкам</span>
-                <input
-                  type="radio"
-                  name="group_mode"
-                  checked={groupMode === 'banks'}
-                  onChange={() => setGroupMode('banks')}
-                />
-              </label>
-            </div>
           </div>
 
           <div className="banks-table-wrap">
             {state.isLoading ? (
               <div className="banks-table__empty">Загружаю банковские счета...</div>
-            ) : groups.length === 0 ? (
+            ) : rows.length === 0 ? (
               <div className="banks-table__empty">
                 {search ? 'По текущему поиску банки и счета не найдены.' : 'Банки и банковские счета пока не добавлены.'}
               </div>
@@ -212,60 +180,19 @@ export default function BanksPage() {
               <table className="banks-table">
                 <thead>
                   <tr>
-                    <th />
                     <th>Банк</th>
                     <th>Наименование фирмы</th>
                     <th>Остаток</th>
-                    <th>IBAN</th>
-                    <th>SWIFT/BIC</th>
-                    <th>Полное название банка</th>
-                    <th>Адрес банка</th>
-                    <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {groups.map((group) =>
-                    group.items.map((item, index) => (
-                      <tr key={item.row_key}>
-                        <td className="banks-table__checkbox">
-                          <input type="checkbox" />
-                        </td>
-                        <td className="banks-table__bank">
-                          {index === 0 ? group.label : ''}
-                        </td>
-                        <td className="banks-table__company">{item.company_name || 'Не привязано'}</td>
-                        <td>{formatBalanceLabel(item)}</td>
-                        <td>{item.iban || item.account_number || '-'}</td>
-                        <td>{item.swift_or_bic || '-'}</td>
-                        <td>{item.bank_full_name}</td>
-                        <td>{item.bank_address || '-'}</td>
-                        <td className="banks-table__actions">
-                          <button type="button" aria-label="Копировать">
-                            <Copy size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            aria-label={item.account_id ? 'Редактировать счёт' : 'Создать счёт для банка'}
-                            title={item.account_id ? 'Редактировать счёт' : 'Создать счёт и привязать компанию'}
-                            onClick={() => {
-                              if (item.account_id) {
-                                navigate(`/banks/${item.account_id}/edit`)
-                                return
-                              }
-
-                              const params = new URLSearchParams({ bankId: String(item.bank_id) })
-                              navigate(`/banks/new?${params.toString()}`)
-                            }}
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button type="button" aria-label="Удалить">
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
-                    )),
-                  )}
+                  {rows.map((item) => (
+                    <tr key={item.row_key}>
+                      <td className="banks-table__bank">{item.bank_label}</td>
+                      <td className="banks-table__company">{item.company_legal_name || 'Не привязано'}</td>
+                      <td>{formatBalanceLabel(item)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             )}

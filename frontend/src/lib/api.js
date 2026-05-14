@@ -39,6 +39,11 @@ export async function fetchPayments(params) {
   return data
 }
 
+export async function fetchPaymentsMeta() {
+  const { data } = await api.get('/payments/meta')
+  return data
+}
+
 export async function fetchPayment(paymentId) {
   const { data } = await api.get(`/payments/${paymentId}`)
   return data

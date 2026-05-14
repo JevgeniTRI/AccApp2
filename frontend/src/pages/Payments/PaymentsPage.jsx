@@ -2,11 +2,10 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Download, Eye, Filter, Paperclip, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import LookupField from '../../components/LookupField/LookupField'
-import { buildPaymentAttachmentUrl, deletePayment, fetchPayments } from '../../lib/api'
+import { buildPaymentAttachmentUrl, deletePayment, fetchPayments, fetchPaymentsMeta } from '../../lib/api'
 import {
   formatAmount,
   formatDate,
-  getMonthStart,
   loadLookup,
   toDateInputValue,
   toNumber,
@@ -49,11 +48,9 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
             <tr key={payment.id}>
               <td>
                 {formatDate(payment.booking_date)}
-                <span className="payments-table__secondary">value {formatDate(payment.value_date)}</span>
               </td>
               <td>
                 {payment.company?.name || '-'}
-                <span className="payments-table__secondary">ref {payment.payment_reference || '-'}</span>
               </td>
               <td className="payments-table__party">{payment.related_company?.name || '-'}</td>
               <td className="payments-table__bank">{payment.bank?.name || '-'}</td>
@@ -128,7 +125,7 @@ export default function PaymentsPage() {
     items: [],
   })
   const [filters, setFilters] = useState({
-    dateFrom: toDateInputValue(getMonthStart()),
+    dateFrom: '',
     dateTo: toDateInputValue(new Date()),
     search: '',
     company: null,
@@ -144,6 +141,30 @@ export default function PaymentsPage() {
   })
 
   const deferredSearch = useDeferredValue(filters.search)
+
+  useEffect(() => {
+    let isCancelled = false
+
+    async function loadPaymentsMeta() {
+      try {
+        const data = await fetchPaymentsMeta()
+        if (!isCancelled && data.earliest_booking_date) {
+          setFilters((current) => ({
+            ...current,
+            dateFrom: current.dateFrom || data.earliest_booking_date,
+          }))
+        }
+      } catch {
+        // The list itself can still load; leave the date editable if metadata is unavailable.
+      }
+    }
+
+    loadPaymentsMeta()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let isCancelled = false

@@ -17,6 +17,7 @@ from app.schemas.payments import (
     PaymentCreateRequest,
     PaymentCreateResponse,
     PaymentDetailResponse,
+    PaymentFiltersMetaResponse,
     PaymentListResponse,
     PaymentRow,
 )
@@ -25,6 +26,7 @@ from app.services.payments import (
     create_payment,
     create_payments_batch,
     delete_payment,
+    get_earliest_payment_booking_date,
     get_bank_account_balance,
     get_payment_detail,
     list_payments,
@@ -108,6 +110,12 @@ async def get_payments(
         )
 
     return PaymentListResponse(total=total, items=items)
+
+
+@router.get("/meta", response_model=PaymentFiltersMetaResponse)
+async def get_payments_meta(db: AsyncSession = Depends(get_db)) -> PaymentFiltersMetaResponse:
+    earliest_booking_date = await get_earliest_payment_booking_date(db)
+    return PaymentFiltersMetaResponse(earliest_booking_date=earliest_booking_date)
 
 
 @router.post("", response_model=PaymentCreateResponse, status_code=201)

@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
@@ -53,6 +54,7 @@ class BankAccountOverviewItem(BaseModel):
     id: int
     company_id: int | None = None
     company_name: str | None = None
+    company_legal_name: str | None = None
     bank_id: int
     bank_label: str
     bank_full_name: str
@@ -61,6 +63,7 @@ class BankAccountOverviewItem(BaseModel):
     swift_or_bic: str | None = None
     bank_address: str | None = None
     currency_code: str | None = None
+    balance: Decimal | None = None
     is_primary: bool
     is_active: bool
     opened_at: date | None = None

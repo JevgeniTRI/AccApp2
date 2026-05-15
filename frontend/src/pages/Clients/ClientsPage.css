@@ -52,3 +52,87 @@
   background: rgba(41, 89, 255, 0.08);
   color: #2964ff;
 }
+
+@media (max-width: 700px) {
+  .clients-table {
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .clients-table thead {
+    display: none;
+  }
+
+  .clients-table tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .clients-table tr {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(54, 64, 88, 0.08);
+    border-radius: 16px;
+    background: #fff;
+  }
+
+  .clients-table tr:hover td {
+    background: transparent;
+  }
+
+  .clients-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0;
+    border-bottom: 0;
+    word-break: break-word;
+  }
+
+  .clients-table td::before {
+    flex: 0 0 112px;
+    color: var(--muted-text);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .clients-table td:nth-child(1) {
+    display: none;
+  }
+
+  .clients-table td:nth-child(2)::before {
+    content: 'Клиент';
+  }
+
+  .clients-table td:nth-child(3)::before {
+    content: 'ID';
+  }
+
+  .clients-table td:nth-child(4)::before {
+    content: 'Рождение';
+  }
+
+  .clients-table td:nth-child(5)::before {
+    content: 'Страна';
+  }
+
+  .clients-table td:nth-child(6)::before {
+    content: 'Контакты';
+  }
+
+  .clients-table td:nth-child(7)::before {
+    content: 'Город';
+  }
+
+  .clients-table td:nth-child(8)::before {
+    content: 'Статус';
+  }
+
+  .clients-table td:nth-child(9)::before {
+    content: 'Действия';
+  }
+}

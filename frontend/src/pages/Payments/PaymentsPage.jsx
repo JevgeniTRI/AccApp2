@@ -49,7 +49,6 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
           <th>Клиент</th>
           <th>Комментарий</th>
           <th>Статус</th>
-          <th />
         </tr>
       </thead>
       <tbody>
@@ -58,8 +57,15 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
 
           return (
             <tr key={payment.id}>
-              <td>
-                {formatDate(payment.booking_date)}
+              <td className="payments-table__date-cell">
+                <span>{formatDate(payment.booking_date)}</span>
+                <RowActions
+                  className="payments-table__inline-actions"
+                  actions={[
+                    { kind: 'edit', label: 'Редактировать платёж', onClick: () => onEdit(payment.id) },
+                    { kind: 'delete', label: 'Удалить платёж', onClick: () => onDelete(payment.id) },
+                  ]}
+                />
               </td>
               <td>
                 {payment.company?.name || '-'}
@@ -98,15 +104,6 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
               </td>
               <td>
                 <span className="payments-table__pill">{payment.status.replaceAll('_', ' ')}</span>
-              </td>
-              <td className="payments-table__actions">
-                <RowActions
-                  className="payments-table__actions-group"
-                  actions={[
-                    { kind: 'edit', label: 'Редактировать платёж', onClick: () => onEdit(payment.id) },
-                    { kind: 'delete', label: 'Удалить платёж', onClick: () => onDelete(payment.id) },
-                  ]}
-                />
               </td>
             </tr>
           )

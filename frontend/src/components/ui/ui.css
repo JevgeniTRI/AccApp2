@@ -209,14 +209,69 @@
     padding: 20px 14px 26px;
   }
 
+  .ui-page-header h1 {
+    font-size: 24px;
+  }
+
+  .ui-data-card {
+    border-radius: 22px;
+  }
+
   .ui-toolbar,
   .ui-status-bar {
     padding-left: 16px;
     padding-right: 16px;
   }
 
+  .ui-button--primary,
+  .ui-search {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
   .ui-export-actions {
     justify-content: flex-start;
     flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 560px) {
+  .ui-page {
+    padding: 16px 10px 22px;
+  }
+
+  .ui-page-header {
+    margin-bottom: 14px;
+  }
+
+  .ui-page-header h1 {
+    font-size: 22px;
+  }
+
+  .ui-data-card {
+    border-radius: 18px;
+  }
+
+  .ui-toolbar {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .ui-status-bar {
+    align-items: flex-start;
+    gap: 8px;
+    padding: 0 14px 14px;
+  }
+
+  .ui-search {
+    min-width: 0;
+  }
+
+  .ui-icon-button {
+    flex: 1 1 42px;
+  }
+
+  .ui-export-actions {
+    padding-top: 14px;
   }
 }

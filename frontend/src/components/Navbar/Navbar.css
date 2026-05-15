@@ -104,11 +104,47 @@
   .navbar__container {
     padding: 12px 14px;
     align-items: flex-start;
+    gap: 12px;
   }
 
   .navbar__left {
     align-items: flex-start;
     flex-direction: column;
     gap: 12px;
+    flex: 1 1 auto;
+  }
+
+  .navbar__nav {
+    width: min(100vw - 96px, 100%);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .navbar__link {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .navbar__container {
+    min-height: 64px;
+    padding: 10px;
+  }
+
+  .navbar__logo,
+  .navbar__profile {
+    width: 34px;
+    height: 34px;
+  }
+
+  .navbar__user span {
+    display: none;
+  }
+
+  .navbar__link {
+    padding: 8px 10px;
+    font-size: 11px;
   }
 }

@@ -46,3 +46,76 @@
   color: var(--danger-text);
   font-weight: 600;
 }
+
+@media (max-width: 700px) {
+  .banks-table {
+    min-width: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .banks-table thead {
+    display: none;
+  }
+
+  .banks-table tbody {
+    display: grid;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .banks-table tr {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid rgba(54, 64, 88, 0.08);
+    border-radius: 16px;
+    background: #fff;
+  }
+
+  .banks-table tr:hover td {
+    background: transparent;
+  }
+
+  .banks-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0;
+    border-bottom: 0;
+    text-align: left;
+    word-break: break-word;
+  }
+
+  .banks-table td::before {
+    flex: 0 0 112px;
+    color: var(--muted-text);
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+
+  .banks-table td:nth-child(1)::before {
+    content: 'Банк';
+  }
+
+  .banks-table td:nth-child(2)::before {
+    content: 'Компания';
+  }
+
+  .banks-table td:nth-child(3)::before {
+    content: 'Остаток';
+  }
+
+  .banks-table td:nth-child(4)::before {
+    content: 'Действия';
+  }
+
+  .banks-table__actions {
+    width: auto;
+  }
+
+  .banks-table__actions-inner {
+    justify-content: flex-start;
+  }
+}

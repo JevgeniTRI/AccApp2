@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Save } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import { createBank } from '../../lib/api'
+import { useNavigate, useParams } from 'react-router-dom'
+import { createBank, fetchBank, updateBank } from '../../lib/api'
 import './BankAccountCreatePage.css'
 
 function createInitialState() {
@@ -20,12 +20,59 @@ function createInitialState() {
 
 export default function BankCreatePage() {
   const navigate = useNavigate()
+  const { bankId } = useParams()
+  const isEditMode = Boolean(bankId)
   const [formState, setFormState] = useState(() => createInitialState())
   const [submitState, setSubmitState] = useState({
     isSubmitting: false,
     error: '',
     success: '',
   })
+  const [isLoading, setIsLoading] = useState(isEditMode)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadBank() {
+      if (!isEditMode || !bankId) {
+        setIsLoading(false)
+        return
+      }
+
+      try {
+        const bank = await fetchBank(bankId)
+        if (!cancelled) {
+          setFormState({
+            name: bank.name || '',
+            shortName: bank.short_name || '',
+            swiftCode: bank.swift_code || '',
+            countryCode: bank.country_code || '',
+            website: bank.website || '',
+            addressLine1: bank.address_line1 || '',
+            addressLine2: bank.address_line2 || '',
+            city: bank.city || '',
+            postalCode: bank.postal_code || '',
+          })
+          setIsLoading(false)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSubmitState({
+            isSubmitting: false,
+            error: error.response?.data?.detail || 'Не удалось загрузить банк',
+            success: '',
+          })
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadBank()
+
+    return () => {
+      cancelled = true
+    }
+  }, [bankId, isEditMode])
 
   function updateField(name, value) {
     setFormState((current) => ({ ...current, [name]: value }))
@@ -36,7 +83,7 @@ export default function BankCreatePage() {
     setSubmitState({ isSubmitting: true, error: '', success: '' })
 
     try {
-      await createBank({
+      const payload = {
         name: formState.name.trim(),
         short_name: formState.shortName.trim() || null,
         swift_code: formState.swiftCode.trim() || null,
@@ -46,7 +93,13 @@ export default function BankCreatePage() {
         address_line2: formState.addressLine2.trim() || null,
         city: formState.city.trim() || null,
         postal_code: formState.postalCode.trim() || null,
-      })
+      }
+
+      if (isEditMode && bankId) {
+        await updateBank(bankId, payload)
+      } else {
+        await createBank(payload)
+      }
 
       setSubmitState({ isSubmitting: false, error: '', success: 'Банк сохранён' })
       window.setTimeout(() => navigate('/banks'), 500)
@@ -67,12 +120,13 @@ export default function BankCreatePage() {
             <ArrowLeft size={18} />
           </button>
           <div>
-            <h1>Добавить банк</h1>
+            <h1>{isEditMode ? 'Редактировать банк' : 'Добавить банк'}</h1>
             <p>Банк создаётся отдельно и потом может использоваться в одном или нескольких счетах.</p>
           </div>
         </div>
 
         <form className="bank-account-create-card" onSubmit={handleSubmit}>
+          {isLoading ? <div className="bank-account-create-message">Загружаю банк...</div> : null}
           <section className="bank-account-create-section">
             <div className="bank-account-create-section__title">Реквизиты банка</div>
             <div className="bank-account-create-grid bank-account-create-grid--3">
@@ -163,7 +217,7 @@ export default function BankCreatePage() {
               <button type="button" className="bank-account-create-button" onClick={() => navigate('/banks')}>
                 Отмена
               </button>
-              <button type="submit" className="bank-account-create-button is-primary" disabled={submitState.isSubmitting}>
+              <button type="submit" className="bank-account-create-button is-primary" disabled={submitState.isSubmitting || isLoading}>
                 <Save size={16} />
                 {submitState.isSubmitting ? 'Сохраняю...' : 'Сохранить банк'}
               </button>

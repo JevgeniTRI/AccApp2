@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Check, ChevronDown, LoaderCircle } from 'lucide-react'
 import './LookupField.css'
 
@@ -21,6 +21,40 @@ export default function LookupField({
   const [loadError, setLoadError] = useState('')
   const [options, setOptions] = useState([])
   const [queryOverride, setQueryOverride] = useState(null)
+  const [panelStyle, setPanelStyle] = useState(null)
+
+  const updatePanelPosition = useCallback(() => {
+    const root = rootRef.current
+    if (!root) {
+      return
+    }
+
+    const control = root.querySelector('.lookup-field__control')
+    const rect = (control || root).getBoundingClientRect()
+    setPanelStyle({
+      position: 'fixed',
+      inset: 'auto auto auto auto',
+      top: `${rect.bottom + 6}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!isOpen || disabled) {
+      setPanelStyle(null)
+      return undefined
+    }
+
+    updatePanelPosition()
+    window.addEventListener('resize', updatePanelPosition)
+    window.addEventListener('scroll', updatePanelPosition, true)
+
+    return () => {
+      window.removeEventListener('resize', updatePanelPosition)
+      window.removeEventListener('scroll', updatePanelPosition, true)
+    }
+  }, [disabled, isOpen, updatePanelPosition])
 
   useEffect(() => {
     if (!isOpen || disabled) {
@@ -87,6 +121,7 @@ export default function LookupField({
       onSelect(null)
     }
     onTextChange(nextValue)
+    updatePanelPosition()
     setIsOpen(true)
   }
 
@@ -100,6 +135,7 @@ export default function LookupField({
     if (!isOpen && fetchOnOpenQuery !== undefined) {
       setQueryOverride(fetchOnOpenQuery)
     }
+    updatePanelPosition()
     setIsOpen(true)
   }
 
@@ -112,6 +148,7 @@ export default function LookupField({
     if (fetchOnOpenQuery !== undefined) {
       setQueryOverride(fetchOnOpenQuery)
     }
+    updatePanelPosition()
     setIsOpen(true)
   }
 
@@ -153,7 +190,7 @@ export default function LookupField({
       )}
 
       {isOpen && !disabled ? (
-        <div className="lookup-field__panel" role="listbox">
+        <div className="lookup-field__panel" style={panelStyle || undefined} role="listbox">
           {isLoading ? (
             <div className="lookup-field__state">
               <LoaderCircle className="lookup-field__spinner" size={16} />
@@ -173,11 +210,11 @@ export default function LookupField({
 
           {!isLoading && !loadError && options.length > 0 ? (
             <div className="lookup-field__options">
-              {options.map((option) => {
-                const isSelected = selectedOption?.value === option.value
+              {options.map((option, index) => {
+                const isSelected = selectedOption?.value === option.value && selectedOption?.label === option.label
                 return (
                   <button
-                    key={String(option.value)}
+                    key={option.key || `${String(option.value)}:${index}`}
                     type="button"
                     className={`lookup-field__option ${isSelected ? 'is-selected' : ''}`}
                     onMouseDown={(event) => {

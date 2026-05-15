@@ -76,11 +76,11 @@ export function normalizeLookupItems(items, type) {
   }))
 }
 
-export async function loadLookup(type, query) {
+export async function loadLookup(type, query, limit = 20) {
   const config = LOOKUP_CONFIG[type]
   const items = config.fetcher
-    ? await config.fetcher(query)
-    : await fetchLookup(config.path, query)
+    ? await config.fetcher(query, limit)
+    : await fetchLookup(config.path, query, limit)
   return normalizeLookupItems(items, type)
 }
 
@@ -95,7 +95,7 @@ export function getShortDisplayName(value) {
 }
 
 export async function loadCompanyPaymentOptions(query) {
-  const accounts = await loadLookup('companyBankAccounts', query)
+  const accounts = await loadLookup('companyBankAccounts', query, 100)
   const seen = new Set()
 
   return accounts
@@ -105,6 +105,7 @@ export async function loadCompanyPaymentOptions(query) {
       const currencyCode = account.currencyCode || '-'
 
       return {
+        key: `${account.companyId}:${account.bankId}:${account.currencyCode || ''}`,
         value: account.companyId,
         label: [companyName, bankName, currencyCode].filter(Boolean).join(' | '),
         companyId: account.companyId,

@@ -1,24 +1,34 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft,
-  Copy,
   Filter,
-  Pencil,
   Plus,
   RefreshCw,
   Search,
   SlidersHorizontal,
-  Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import {
+  Button,
+  DataCard,
+  ExportActions,
+  IconButton,
+  PageHeader,
+  PageShell,
+  RowActions,
+  SearchInput,
+  StatusBar,
+  TableEmpty,
+  TableWrap,
+  Toolbar,
+} from '../../components/ui'
 import { deleteCounterparty, fetchCounterpartiesOverview } from '../../lib/api'
 import './CounterpartiesPage.css'
 
 function EmptyState({ search }) {
   return (
-    <div className="counterparties-table__empty">
+    <TableEmpty>
       {search ? 'По текущему поиску контрагенты не найдены.' : 'Контрагенты пока не добавлены.'}
-    </div>
+    </TableEmpty>
   )
 }
 
@@ -134,67 +144,49 @@ export default function CounterpartiesPage() {
   }
 
   return (
-    <div className="counterparties-page">
-      <div className="counterparties-shell">
-        <div className="counterparties-heading">
-          <button type="button" className="counterparties-back" aria-label="Назад" onClick={() => navigate(-1)}>
-            <ArrowLeft size={18} />
-          </button>
-          <h1>Контрагенты</h1>
-        </div>
+    <PageShell>
+      <PageHeader title="Контрагенты" onBack={() => navigate(-1)} />
 
-        <section className="counterparties-card">
-          <div className="counterparties-toolbar">
-            <button type="button" className="counterparties-action" onClick={() => navigate('/counterparties/new')}>
+      <DataCard>
+          <Toolbar>
+            <Button variant="primary" onClick={() => navigate('/counterparties/new')}>
               <Plus size={16} />
               Добавить контрагента
-            </button>
+            </Button>
 
-            <label className="counterparties-search">
-              <Search size={16} />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Поиск по названию, клиенту, email, номеру..."
-              />
-            </label>
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Поиск по названию, клиенту, email, номеру..."
+              icon={<Search size={16} />}
+            />
 
-            <button
-              type="button"
-              className="counterparties-icon-button"
+            <IconButton
               onClick={() => setRefreshKey((current) => current + 1)}
               aria-label="Обновить список"
             >
               <RefreshCw size={16} />
-            </button>
-            <button type="button" className="counterparties-icon-button" aria-label="Фильтры">
+            </IconButton>
+            <IconButton aria-label="Фильтры">
               <Filter size={16} />
-            </button>
-            <button type="button" className="counterparties-icon-button" aria-label="Параметры таблицы">
+            </IconButton>
+            <IconButton aria-label="Параметры таблицы">
               <SlidersHorizontal size={16} />
-            </button>
-          </div>
+            </IconButton>
+          </Toolbar>
 
-          <div className="counterparties-status">
-            <div>
-              Найдено <strong>{state.items.length}</strong> контрагентов
-            </div>
-            <div>
-              Активных: <strong>{activeCounterpartiesCount}</strong>
-            </div>
-            <div>
-              {actionState.success ? <span className="counterparties-status__success">{actionState.success}</span> : null}
-            </div>
-            <div>
-              {actionState.error ? <span className="counterparties-status__error">{actionState.error}</span> : null}
-            </div>
-            <div>{state.error ? <span className="counterparties-status__error">{state.error}</span> : null}</div>
-          </div>
+          <StatusBar
+            items={[
+              { label: 'Найдено', value: `${state.items.length} контрагентов` },
+              { label: 'Активных:', value: activeCounterpartiesCount },
+            ]}
+            success={actionState.success}
+            error={actionState.error || state.error}
+          />
 
-          <div className="counterparties-table-wrap">
+          <TableWrap>
             {state.isLoading ? (
-              <div className="counterparties-table__empty">Загружаю контрагентов...</div>
+              <TableEmpty>Загружаю контрагентов...</TableEmpty>
             ) : state.items.length === 0 ? (
               <EmptyState search={Boolean(search)} />
             ) : (
@@ -234,36 +226,29 @@ export default function CounterpartiesPage() {
                           {item.status || '-'}
                         </span>
                       </td>
-                      <td className="counterparties-table__actions">
-                        <button type="button" aria-label="Копировать" onClick={() => handleCopyCounterparty(item)}>
-                          <Copy size={14} />
-                        </button>
-                        <button type="button" aria-label="Редактировать" onClick={() => navigate(`/counterparties/${item.id}/edit`)}>
-                          <Pencil size={14} />
-                        </button>
-                        <button type="button" aria-label="Удалить" onClick={() => handleDeleteCounterparty(item)}>
-                          <Trash2 size={14} />
-                        </button>
+                      <td>
+                        <RowActions
+                          actions={[
+                            { kind: 'copy', label: 'Копировать', onClick: () => handleCopyCounterparty(item) },
+                            { kind: 'edit', label: 'Редактировать', onClick: () => navigate(`/counterparties/${item.id}/edit`) },
+                            { kind: 'delete', label: 'Удалить', onClick: () => handleDeleteCounterparty(item) },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
-          </div>
-        </section>
+          </TableWrap>
+        </DataCard>
 
-        <div className="counterparties-footer">
-          <button type="button" className="counterparties-export">
-            Скачать Excel
-            <span className="counterparties-export__badge">XLS</span>
-          </button>
-          <button type="button" className="counterparties-export">
-            Скачать PDF
-            <span className="counterparties-export__badge">PDF</span>
-          </button>
-        </div>
-      </div>
-    </div>
+      <ExportActions
+        actions={[
+          { label: 'Скачать Excel', badge: 'XLS' },
+          { label: 'Скачать PDF', badge: 'PDF' },
+        ]}
+      />
+    </PageShell>
   )
 }

@@ -1,13 +1,25 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft,
   Filter,
   Plus,
   RefreshCw,
   Search,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { fetchBankAccountsOverview, fetchBanksOverview } from '../../lib/api'
+import {
+  Button,
+  DataCard,
+  ExportActions,
+  IconButton,
+  PageHeader,
+  PageShell,
+  RowActions,
+  SearchInput,
+  TableEmpty,
+  TableWrap,
+  Toolbar,
+} from '../../components/ui'
+import { deleteBank, deleteBankAccount, fetchBankAccountsOverview, fetchBanksOverview } from '../../lib/api'
 import './BanksPage.css'
 
 function formatBalanceLabel(item) {
@@ -72,6 +84,10 @@ export default function BanksPage() {
     accountItems: [],
     bankItems: [],
   })
+  const [actionState, setActionState] = useState({
+    busyKey: '',
+    error: '',
+  })
 
   const deferredSearch = useDeferredValue(search)
 
@@ -125,57 +141,69 @@ export default function BanksPage() {
     [state.accountItems, state.bankItems],
   )
 
-  return (
-    <div className="banks-page">
-      <div className="banks-shell">
-        <div className="banks-heading">
-          <button type="button" className="banks-back" aria-label="Назад">
-            <ArrowLeft size={18} />
-          </button>
-          <h1>Банки</h1>
-        </div>
+  function getEditPath(item) {
+    return item.row_type === 'bank' ? `/banks/bank/${item.bank_id}/edit` : `/banks/${item.account_id}/edit`
+  }
 
-        <section className="banks-card">
-          <div className="banks-toolbar">
-            <button type="button" className="banks-action" onClick={() => navigate('/banks/new-bank')}>
+  async function handleDelete(item) {
+    const label = item.row_type === 'bank' ? item.bank_label : `${item.bank_label} / ${item.company_legal_name || 'Не привязано'}`
+    const confirmed = window.confirm(`Удалить запись "${label}"?`)
+    if (!confirmed) {
+      return
+    }
+
+    setActionState({ busyKey: item.row_key, error: '' })
+    try {
+      if (item.row_type === 'bank') {
+        await deleteBank(item.bank_id)
+      } else {
+        await deleteBankAccount(item.account_id)
+      }
+      setActionState({ busyKey: '', error: '' })
+      setRefreshKey((current) => current + 1)
+    } catch (error) {
+      setActionState({
+        busyKey: '',
+        error: error.response?.data?.detail || error.message || 'Не удалось удалить запись',
+      })
+    }
+  }
+
+  return (
+    <PageShell>
+      <PageHeader title="Банки" onBack={() => navigate(-1)} />
+
+      <DataCard>
+          <Toolbar>
+            <Button variant="primary" onClick={() => navigate('/banks/new-bank')}>
               <Plus size={16} />
               Добавить банк
-            </button>
-            <button type="button" className="banks-action" onClick={() => navigate('/banks/new')}>
+            </Button>
+            <Button variant="primary" onClick={() => navigate('/banks/new')}>
               <Plus size={16} />
               Добавить счёт
-            </button>
+            </Button>
 
-            <label className="banks-search">
-              <Search size={16} />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Поиск..."
-              />
-            </label>
+            <SearchInput value={search} onChange={setSearch} placeholder="Поиск..." icon={<Search size={16} />} />
 
-            <button
-              type="button"
-              className="banks-icon-button"
+            <IconButton
               onClick={() => setRefreshKey((current) => current + 1)}
               aria-label="Обновить список"
             >
               <RefreshCw size={16} />
-            </button>
-            <button type="button" className="banks-icon-button" aria-label="Фильтры">
+            </IconButton>
+            <IconButton aria-label="Фильтры">
               <Filter size={16} />
-            </button>
-          </div>
+            </IconButton>
+          </Toolbar>
 
-          <div className="banks-table-wrap">
+          <TableWrap>
             {state.isLoading ? (
-              <div className="banks-table__empty">Загружаю банковские счета...</div>
+              <TableEmpty>Загружаю банковские счета...</TableEmpty>
             ) : rows.length === 0 ? (
-              <div className="banks-table__empty">
+              <TableEmpty>
                 {search ? 'По текущему поиску банки и счета не найдены.' : 'Банки и банковские счета пока не добавлены.'}
-              </div>
+              </TableEmpty>
             ) : (
               <table className="banks-table">
                 <thead>
@@ -183,6 +211,7 @@ export default function BanksPage() {
                     <th>Банк</th>
                     <th>Наименование фирмы</th>
                     <th>Остаток</th>
+                    <th className="banks-table__actions-heading">Действия</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -191,26 +220,36 @@ export default function BanksPage() {
                       <td className="banks-table__bank">{item.bank_label}</td>
                       <td className="banks-table__company">{item.company_legal_name || 'Не привязано'}</td>
                       <td>{formatBalanceLabel(item)}</td>
+                      <td className="banks-table__actions">
+                        <RowActions
+                          className="banks-table__actions-inner"
+                          actions={[
+                            { kind: 'edit', label: 'Редактировать запись', onClick: () => navigate(getEditPath(item)) },
+                            {
+                              kind: 'delete',
+                              label: 'Удалить запись',
+                              onClick: () => handleDelete(item),
+                              disabled: actionState.busyKey === item.row_key,
+                            },
+                          ]}
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
-          </div>
+          </TableWrap>
           {state.error ? <div className="banks-status__error">{state.error}</div> : null}
-        </section>
+          {actionState.error ? <div className="banks-status__error">{actionState.error}</div> : null}
+        </DataCard>
 
-        <div className="banks-footer">
-          <button type="button" className="banks-export">
-            Скачать Excel
-            <span className="banks-export__badge">XLS</span>
-          </button>
-          <button type="button" className="banks-export">
-            Скачать PDF
-            <span className="banks-export__badge">PDF</span>
-          </button>
-        </div>
-      </div>
-    </div>
+      <ExportActions
+        actions={[
+          { label: 'Скачать Excel', badge: 'XLS' },
+          { label: 'Скачать PDF', badge: 'PDF' },
+        ]}
+      />
+    </PageShell>
   )
 }

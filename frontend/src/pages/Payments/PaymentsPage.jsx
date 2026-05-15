@@ -1,7 +1,19 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, Download, Eye, Filter, Paperclip, Pencil, Plus, RefreshCw, Search, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { Download, Eye, Filter, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import LookupField from '../../components/LookupField/LookupField'
+import {
+  Button,
+  DataCard,
+  ExportActions,
+  IconButton,
+  PageHeader,
+  PageShell,
+  RowActions,
+  SearchInput,
+  TableEmpty,
+  TableWrap,
+} from '../../components/ui'
 import { buildPaymentAttachmentUrl, deletePayment, fetchPayments, fetchPaymentsMeta } from '../../lib/api'
 import {
   formatAmount,
@@ -14,9 +26,9 @@ import './PaymentsPage.css'
 
 function EmptyState({ search }) {
   return (
-    <div className="payments-table__empty">
+    <TableEmpty>
       {search ? 'По текущим фильтрам ничего не найдено.' : 'Платежей пока нет. Добавьте первую запись.'}
-    </div>
+    </TableEmpty>
   )
 }
 
@@ -88,24 +100,13 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
                 <span className="payments-table__pill">{payment.status.replaceAll('_', ' ')}</span>
               </td>
               <td className="payments-table__actions">
-                <div className="payments-table__actions-group">
-                  <button
-                    type="button"
-                    className="payments-table__icon-button"
-                    onClick={() => onEdit(payment.id)}
-                    aria-label="Редактировать платёж"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className="payments-table__icon-button"
-                    onClick={() => onDelete(payment.id)}
-                    aria-label="Удалить платёж"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                <RowActions
+                  className="payments-table__actions-group"
+                  actions={[
+                    { kind: 'edit', label: 'Редактировать платёж', onClick: () => onEdit(payment.id) },
+                    { kind: 'delete', label: 'Удалить платёж', onClick: () => onDelete(payment.id) },
+                  ]}
+                />
               </td>
             </tr>
           )
@@ -266,22 +267,16 @@ export default function PaymentsPage() {
   }
 
   return (
-    <div className="payments-page">
-      <div className="payments-shell">
-        <div className="payments-heading">
-          <button type="button" className="payments-back" aria-label="Назад">
-            <ArrowLeft size={18} />
-          </button>
-          <h1>Платежи</h1>
-        </div>
+    <PageShell>
+      <PageHeader title="Платежи" onBack={() => navigate(-1)} />
 
-        <section className="payments-card">
+        <DataCard>
           <div className="payments-toolbar">
             <div className="payments-toolbar__row">
-              <button type="button" className="payments-action" onClick={() => navigate('/payments/new')}>
+              <Button variant="primary" onClick={() => navigate('/payments/new')}>
                 <Plus size={16} />
                 Добавить платеж
-              </button>
+              </Button>
 
               <div className="payments-date-group">
                 <input
@@ -299,30 +294,25 @@ export default function PaymentsPage() {
                 />
               </div>
 
-              <label className="payments-search">
-                <Search size={16} />
-                <input
-                  type="search"
-                  value={filters.search}
-                  onChange={(event) => updateFilter('search', event.target.value)}
-                  placeholder="Поиск по компании, банку, клиенту, комментарию"
-                />
-              </label>
+              <SearchInput
+                value={filters.search}
+                onChange={(value) => updateFilter('search', value)}
+                placeholder="Поиск по компании, банку, клиенту, комментарию"
+                icon={<Search size={16} />}
+              />
 
-              <button
-                type="button"
-                className="payments-icon-button"
+              <IconButton
                 onClick={() => setRefreshKey((current) => current + 1)}
                 aria-label="Обновить список"
               >
                 <RefreshCw size={16} />
-              </button>
-              <button type="button" className="payments-icon-button" aria-label="Фильтры">
+              </IconButton>
+              <IconButton aria-label="Фильтры">
                 <Filter size={16} />
-              </button>
-              <button type="button" className="payments-icon-button" aria-label="Параметры таблицы">
+              </IconButton>
+              <IconButton aria-label="Параметры таблицы">
                 <SlidersHorizontal size={16} />
-              </button>
+              </IconButton>
             </div>
 
             <div className="payments-toolbar__row filters">
@@ -416,9 +406,9 @@ export default function PaymentsPage() {
             <div>{paymentsState.error ? <span className="payments-status__error">{paymentsState.error}</span> : null}</div>
           </div>
 
-          <div className="payments-table-wrap">
+          <TableWrap>
             {paymentsState.isLoading ? (
-              <div className="payments-table__empty">Загружаю платежи...</div>
+              <TableEmpty>Загружаю платежи...</TableEmpty>
             ) : paymentsState.items.length === 0 ? (
               <EmptyState search={Boolean(filters.search)} />
             ) : (
@@ -428,7 +418,7 @@ export default function PaymentsPage() {
                 onDelete={handleDelete}
               />
             )}
-          </div>
+          </TableWrap>
 
           <div className="payments-summary">
             <div className="payments-summary__item">
@@ -444,23 +434,15 @@ export default function PaymentsPage() {
               <span className="payments-summary__value">{formatAmount(summary.balance)}</span>
             </div>
           </div>
-        </section>
+        </DataCard>
 
-        <div className="payments-footer">
-          <button type="button" className="payments-export">
-            Скачать Excel
-            <span className="payments-export__badge">XLS</span>
-          </button>
-          <button type="button" className="payments-export">
-            Скачать PDF
-            <span className="payments-export__badge">PDF</span>
-          </button>
-          <button type="button" className="payments-export">
-            Экспорт
-            <Download size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
+      <ExportActions
+        actions={[
+          { label: 'Скачать Excel', badge: 'XLS' },
+          { label: 'Скачать PDF', badge: 'PDF' },
+          { label: 'Экспорт', icon: <Download size={14} /> },
+        ]}
+      />
+    </PageShell>
   )
 }

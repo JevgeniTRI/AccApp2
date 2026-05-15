@@ -822,11 +822,6 @@ export default function AddPaymentsPage() {
               ))}
             </datalist>
 
-            <datalist id="company-payment-options">
-              {(optionsState.companyPaymentOptions || []).map((option) => (
-                <option key={`${option.value}:${option.bankId}:${option.currencyCode || ''}`} value={option.label} />
-              ))}
-            </datalist>
           </div>
 
           {message.text ? (
@@ -889,23 +884,27 @@ export default function AddPaymentsPage() {
                               >
                                 {row.expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </button>
-                              <input
-                                list="company-payment-options"
-                                type="text"
-                                value={row.relatedCompanyText}
-                                onChange={(event) => {
-                                  const nextValue = event.target.value
-                                  const selectedCompany = findLookupOption(
-                                    'companies',
-                                    nextValue,
-                                    optionsState.companyPaymentOptions || [],
-                                  )
-                                  updateRow(row.id, {
-                                    relatedCompanyText: nextValue,
-                                    relatedCompany: selectedCompany,
-                                  })
-                                }}
+                              <LookupField
                                 placeholder="Компания из справочника"
+                                textValue={row.relatedCompanyText}
+                                selectedOption={row.relatedCompany}
+                                onTextChange={(value) =>
+                                  updateRow(row.id, {
+                                    relatedCompanyText: value,
+                                    relatedCompany:
+                                      row.relatedCompany && value !== row.relatedCompany.label
+                                        ? null
+                                        : row.relatedCompany,
+                                  })
+                                }
+                                onSelect={(option) =>
+                                  updateRow(row.id, {
+                                    relatedCompany: option,
+                                    relatedCompanyText: option?.label ?? '',
+                                  })
+                                }
+                                fetchOptions={(query) => loadCompanyPaymentOptions(query)}
+                                fetchOnOpenQuery=""
                               />
                             </div>
                           ) : (

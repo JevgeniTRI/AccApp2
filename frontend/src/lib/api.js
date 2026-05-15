@@ -136,9 +136,27 @@ export async function updateBankAccount(bankAccountId, payload) {
   return data
 }
 
+export async function deleteBankAccount(bankAccountId) {
+  await api.delete(`/bank-accounts/${bankAccountId}`)
+}
+
 export async function createBank(payload) {
   const { data } = await api.post('/banks', payload)
   return data
+}
+
+export async function fetchBank(bankId) {
+  const { data } = await api.get(`/banks/${bankId}`)
+  return data
+}
+
+export async function updateBank(bankId, payload) {
+  const { data } = await api.put(`/banks/${bankId}`, payload)
+  return data
+}
+
+export async function deleteBank(bankId) {
+  await api.delete(`/banks/${bankId}`)
 }
 
 export async function fetchClientsOverview(params) {

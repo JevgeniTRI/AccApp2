@@ -94,6 +94,7 @@ function App() {
           <Route path="/companies/:companyId/edit" element={<CompanyCreatePage />} />
           <Route path="/banks" element={<BanksPage />} />
           <Route path="/banks/new-bank" element={<BankCreatePage />} />
+          <Route path="/banks/bank/:bankId/edit" element={<BankCreatePage />} />
           <Route path="/banks/new" element={<BankAccountCreatePage />} />
           <Route path="/banks/:bankAccountId/edit" element={<BankAccountCreatePage />} />
           <Route path="/clients" element={<ClientsPage />} />

@@ -15,6 +15,7 @@ from app.schemas.reference import (
     BankAccountOverviewItem,
     BankCreateRequest,
     BankOverviewItem,
+    BankResponse,
     ClientCreateRequest,
     ClientDetailResponse,
     ClientOverviewItem,
@@ -585,6 +586,52 @@ async def create_bank(db: AsyncSession, payload: BankCreateRequest) -> Bank:
     return bank
 
 
+async def get_bank_detail(db: AsyncSession, bank_id: int) -> BankResponse | None:
+    bank = await db.get(Bank, bank_id)
+    if bank is None:
+        return None
+
+    return BankResponse(
+        id=bank.id,
+        name=bank.name,
+        short_name=bank.short_name,
+        swift_code=bank.swift_code,
+        country_code=bank.country_code,
+        address_line1=bank.address_line1,
+        address_line2=bank.address_line2,
+        city=bank.city,
+        postal_code=bank.postal_code,
+        website=bank.website,
+    )
+
+
+async def update_bank(db: AsyncSession, bank_id: int, payload: BankCreateRequest) -> Bank:
+    bank = await db.get(Bank, bank_id)
+    if bank is None:
+        raise ValueError("Bank not found")
+
+    bank.name = payload.name.strip()
+    bank.short_name = payload.short_name.strip() if payload.short_name else None
+    bank.swift_code = payload.swift_code.strip() if payload.swift_code else None
+    bank.country_code = payload.country_code.strip().upper() if payload.country_code else None
+    bank.address_line1 = payload.address_line1.strip() if payload.address_line1 else None
+    bank.address_line2 = payload.address_line2.strip() if payload.address_line2 else None
+    bank.city = payload.city.strip() if payload.city else None
+    bank.postal_code = payload.postal_code.strip() if payload.postal_code else None
+    bank.website = payload.website.strip() if payload.website else None
+
+    await db.flush()
+    return bank
+
+
+async def delete_bank(db: AsyncSession, bank_id: int) -> None:
+    bank = await db.get(Bank, bank_id)
+    if bank is None:
+        raise ValueError("Bank not found")
+    await db.delete(bank)
+    await db.flush()
+
+
 async def resolve_company_for_bank_account(db: AsyncSession, company_id: int | None) -> Company | None:
     if company_id is None:
         return None
@@ -731,6 +778,14 @@ async def update_bank_account(
     account.closed_at = payload.closed_at
     await db.flush()
     return account
+
+
+async def delete_bank_account(db: AsyncSession, bank_account_id: int) -> None:
+    account = await db.get(CompanyBankAccount, bank_account_id)
+    if account is None:
+        raise ValueError("Bank account not found")
+    await db.delete(account)
+    await db.flush()
 
 
 async def search_clients(db: AsyncSession, query: str | None, limit: int) -> list[Client]:

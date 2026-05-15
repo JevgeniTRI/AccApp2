@@ -216,6 +216,48 @@
   gap: 8px;
 }
 
+.add-payments-table__party-inner .lookup-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  --lookup-options-max-height: 408px;
+}
+
+.add-payments-table__party-inner .lookup-field__control {
+  min-height: 38px;
+  border-color: transparent;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.add-payments-table__party-inner .lookup-field__control.is-open,
+.add-payments-table__party-inner .lookup-field__control:focus-within {
+  border-color: var(--line-soft);
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(32, 36, 48, 0.08);
+}
+
+.add-payments-table__party-inner .lookup-field__input {
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 0;
+  box-shadow: none;
+}
+
+.add-payments-table__party-inner .lookup-field__toggle {
+  width: 34px;
+  height: 36px;
+}
+
+.add-payments-table__party-inner .lookup-field__meta {
+  display: none;
+}
+
+.add-payments-table__party-inner .lookup-field__panel {
+  min-width: 360px;
+  z-index: 35;
+}
+
 .add-payments-expand {
   flex: 0 0 auto;
   display: inline-flex;

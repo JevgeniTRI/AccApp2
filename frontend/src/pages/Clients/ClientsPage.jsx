@@ -1,24 +1,34 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft,
-  Copy,
   Filter,
-  Pencil,
   Plus,
   RefreshCw,
   Search,
   SlidersHorizontal,
-  Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import {
+  Button,
+  DataCard,
+  ExportActions,
+  IconButton,
+  PageHeader,
+  PageShell,
+  RowActions,
+  SearchInput,
+  StatusBar,
+  TableEmpty,
+  TableWrap,
+  Toolbar,
+} from '../../components/ui'
 import { deleteClient, fetchClientsOverview } from '../../lib/api'
 import './ClientsPage.css'
 
 function EmptyState({ search }) {
   return (
-    <div className="clients-table__empty">
+    <TableEmpty>
       {search ? 'По текущему поиску клиенты не найдены.' : 'Клиенты пока не добавлены.'}
-    </div>
+    </TableEmpty>
   )
 }
 
@@ -149,63 +159,49 @@ export default function ClientsPage() {
   }
 
   return (
-    <div className="clients-page">
-      <div className="clients-shell">
-        <div className="clients-heading">
-          <button type="button" className="clients-back" aria-label="Назад" onClick={() => navigate(-1)}>
-            <ArrowLeft size={18} />
-          </button>
-          <h1>Клиенты</h1>
-        </div>
+    <PageShell>
+      <PageHeader title="Клиенты" onBack={() => navigate(-1)} />
 
-        <section className="clients-card">
-          <div className="clients-toolbar">
-            <button type="button" className="clients-action" onClick={() => navigate('/clients/new')}>
+      <DataCard>
+          <Toolbar>
+            <Button variant="primary" onClick={() => navigate('/clients/new')}>
               <Plus size={16} />
               Добавить клиента
-            </button>
+            </Button>
 
-            <label className="clients-search">
-              <Search size={16} />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Поиск по ФИО, email, телефону, ID..."
-              />
-            </label>
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Поиск по ФИО, email, телефону, ID..."
+              icon={<Search size={16} />}
+            />
 
-            <button
-              type="button"
-              className="clients-icon-button"
+            <IconButton
               onClick={() => setRefreshKey((current) => current + 1)}
               aria-label="Обновить список"
             >
               <RefreshCw size={16} />
-            </button>
-            <button type="button" className="clients-icon-button" aria-label="Фильтры">
+            </IconButton>
+            <IconButton aria-label="Фильтры">
               <Filter size={16} />
-            </button>
-            <button type="button" className="clients-icon-button" aria-label="Параметры таблицы">
+            </IconButton>
+            <IconButton aria-label="Параметры таблицы">
               <SlidersHorizontal size={16} />
-            </button>
-          </div>
+            </IconButton>
+          </Toolbar>
 
-          <div className="clients-status">
-            <div>
-              Найдено <strong>{state.items.length}</strong> клиентов
-            </div>
-            <div>
-              Активных: <strong>{activeClientsCount}</strong>
-            </div>
-            <div>{actionState.success ? <span className="clients-status__success">{actionState.success}</span> : null}</div>
-            <div>{actionState.error ? <span className="clients-status__error">{actionState.error}</span> : null}</div>
-            <div>{state.error ? <span className="clients-status__error">{state.error}</span> : null}</div>
-          </div>
+          <StatusBar
+            items={[
+              { label: 'Найдено', value: `${state.items.length} клиентов` },
+              { label: 'Активных:', value: activeClientsCount },
+            ]}
+            success={actionState.success}
+            error={actionState.error || state.error}
+          />
 
-          <div className="clients-table-wrap">
+          <TableWrap>
             {state.isLoading ? (
-              <div className="clients-table__empty">Загружаю клиентов...</div>
+              <TableEmpty>Загружаю клиентов...</TableEmpty>
             ) : state.items.length === 0 ? (
               <EmptyState search={Boolean(search)} />
             ) : (
@@ -242,36 +238,29 @@ export default function ClientsPage() {
                           {client.status || '-'}
                         </span>
                       </td>
-                      <td className="clients-table__actions">
-                        <button type="button" aria-label="Копировать" onClick={() => handleCopyClient(client)}>
-                          <Copy size={14} />
-                        </button>
-                        <button type="button" aria-label="Редактировать" onClick={() => handleEditClient(client.id)}>
-                          <Pencil size={14} />
-                        </button>
-                        <button type="button" aria-label="Удалить" onClick={() => handleDeleteClient(client)}>
-                          <Trash2 size={14} />
-                        </button>
+                      <td>
+                        <RowActions
+                          actions={[
+                            { kind: 'copy', label: 'Копировать', onClick: () => handleCopyClient(client) },
+                            { kind: 'edit', label: 'Редактировать', onClick: () => handleEditClient(client.id) },
+                            { kind: 'delete', label: 'Удалить', onClick: () => handleDeleteClient(client) },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
-          </div>
-        </section>
+          </TableWrap>
+        </DataCard>
 
-        <div className="clients-footer">
-          <button type="button" className="clients-export">
-            Скачать Excel
-            <span className="clients-export__badge">XLS</span>
-          </button>
-          <button type="button" className="clients-export">
-            Скачать PDF
-            <span className="clients-export__badge">PDF</span>
-          </button>
-        </div>
-      </div>
-    </div>
+      <ExportActions
+        actions={[
+          { label: 'Скачать Excel', badge: 'XLS' },
+          { label: 'Скачать PDF', badge: 'PDF' },
+        ]}
+      />
+    </PageShell>
   )
 }

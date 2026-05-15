@@ -1,24 +1,34 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft,
-  Copy,
   Filter,
-  Pencil,
   Plus,
   RefreshCw,
   Search,
   SlidersHorizontal,
-  Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import {
+  Button,
+  DataCard,
+  ExportActions,
+  IconButton,
+  PageHeader,
+  PageShell,
+  RowActions,
+  SearchInput,
+  StatusBar,
+  TableEmpty,
+  TableWrap,
+  Toolbar,
+} from '../../components/ui'
 import { deleteCompany, fetchCompaniesOverview } from '../../lib/api'
 import './CompaniesPage.css'
 
 function EmptyState({ search }) {
   return (
-    <div className="companies-table__empty">
+    <TableEmpty>
       {search ? 'По текущему поиску компании не найдены.' : 'Компании пока не добавлены.'}
-    </div>
+    </TableEmpty>
   )
 }
 
@@ -128,63 +138,44 @@ export default function CompaniesPage() {
   }
 
   return (
-    <div className="companies-page">
-      <div className="companies-shell">
-        <div className="companies-heading">
-          <button type="button" className="companies-back" aria-label="Назад" onClick={() => navigate(-1)}>
-            <ArrowLeft size={18} />
-          </button>
-          <h1>Компании</h1>
-        </div>
+    <PageShell>
+      <PageHeader title="Компании" onBack={() => navigate(-1)} />
 
-        <section className="companies-card">
-          <div className="companies-toolbar">
-            <button type="button" className="companies-action" onClick={() => navigate('/companies/new')}>
+      <DataCard>
+          <Toolbar>
+            <Button variant="primary" onClick={() => navigate('/companies/new')}>
               <Plus size={16} />
               Добавить компанию
-            </button>
+            </Button>
 
-            <label className="companies-search">
-              <Search size={16} />
-              <input
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Поиск..."
-              />
-            </label>
+            <SearchInput value={search} onChange={setSearch} placeholder="Поиск..." icon={<Search size={16} />} />
 
-            <button
-              type="button"
-              className="companies-icon-button"
+            <IconButton
               onClick={() => setRefreshKey((current) => current + 1)}
               aria-label="Обновить список"
             >
               <RefreshCw size={16} />
-            </button>
-            <button type="button" className="companies-icon-button" aria-label="Фильтры">
+            </IconButton>
+            <IconButton aria-label="Фильтры">
               <Filter size={16} />
-            </button>
-            <button type="button" className="companies-icon-button" aria-label="Параметры таблицы">
+            </IconButton>
+            <IconButton aria-label="Параметры таблицы">
               <SlidersHorizontal size={16} />
-            </button>
-          </div>
+            </IconButton>
+          </Toolbar>
 
-          <div className="companies-status">
-            <div>
-              Найдено <strong>{state.items.length}</strong> компаний
-            </div>
-            <div>
-              Банковских связей: <strong>{totalBankLinks}</strong>
-            </div>
-            <div>{actionState.success ? <span className="companies-status__success">{actionState.success}</span> : null}</div>
-            <div>{actionState.error ? <span className="companies-status__error">{actionState.error}</span> : null}</div>
-            <div>{state.error ? <span className="companies-status__error">{state.error}</span> : null}</div>
-          </div>
+          <StatusBar
+            items={[
+              { label: 'Найдено', value: `${state.items.length} компаний` },
+              { label: 'Банковских связей:', value: totalBankLinks },
+            ]}
+            success={actionState.success}
+            error={actionState.error || state.error}
+          />
 
-          <div className="companies-table-wrap">
+          <TableWrap>
             {state.isLoading ? (
-              <div className="companies-table__empty">Загружаю компании...</div>
+              <TableEmpty>Загружаю компании...</TableEmpty>
             ) : state.items.length === 0 ? (
               <EmptyState search={Boolean(search)} />
             ) : (
@@ -221,36 +212,29 @@ export default function CompaniesPage() {
                         )}
                       </td>
                       <td>{company.director_name || '-'}</td>
-                      <td className="companies-table__actions">
-                        <button type="button" aria-label="Копировать" onClick={() => handleCopyCompany(company)}>
-                          <Copy size={14} />
-                        </button>
-                        <button type="button" aria-label="Редактировать" onClick={() => handleEditCompany(company.id)}>
-                          <Pencil size={14} />
-                        </button>
-                        <button type="button" aria-label="Удалить" onClick={() => handleDeleteCompany(company)}>
-                          <Trash2 size={14} />
-                        </button>
+                      <td>
+                        <RowActions
+                          actions={[
+                            { kind: 'copy', label: 'Копировать', onClick: () => handleCopyCompany(company) },
+                            { kind: 'edit', label: 'Редактировать', onClick: () => handleEditCompany(company.id) },
+                            { kind: 'delete', label: 'Удалить', onClick: () => handleDeleteCompany(company) },
+                          ]}
+                        />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
-          </div>
-        </section>
+          </TableWrap>
+        </DataCard>
 
-        <div className="companies-footer">
-          <button type="button" className="companies-export">
-            Скачать Excel
-            <span className="companies-export__badge">XLS</span>
-          </button>
-          <button type="button" className="companies-export">
-            Скачать PDF
-            <span className="companies-export__badge">PDF</span>
-          </button>
-        </div>
-      </div>
-    </div>
+      <ExportActions
+        actions={[
+          { label: 'Скачать Excel', badge: 'XLS' },
+          { label: 'Скачать PDF', badge: 'PDF' },
+        ]}
+      />
+    </PageShell>
   )
 }

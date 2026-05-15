@@ -38,11 +38,14 @@ from app.services.reference import (
     create_company,
     create_counterparty,
     create_currency,
+    delete_bank,
+    delete_bank_account,
     delete_client,
     delete_company,
     delete_counterparty,
     format_bank_display_name,
     format_company_display_name,
+    get_bank_detail,
     get_client_detail,
     get_bank_account_detail,
     get_company_detail,
@@ -59,6 +62,7 @@ from app.services.reference import (
     search_counterparties,
     search_currencies,
     update_client,
+    update_bank,
     update_bank_account,
     update_company,
     update_counterparty,
@@ -76,6 +80,21 @@ def build_lookup_items(records: list[object], label_getter) -> list[LookupItem]:
         label = base_label if duplicates[base_label] == 1 else f"{base_label} [ID {record.id}]"
         items.append(LookupItem(id=record.id, label=label))
     return items
+
+
+def build_bank_response(bank) -> BankResponse:
+    return BankResponse(
+        id=bank.id,
+        name=bank.name,
+        short_name=bank.short_name,
+        swift_code=bank.swift_code,
+        country_code=bank.country_code,
+        address_line1=bank.address_line1,
+        address_line2=bank.address_line2,
+        city=bank.city,
+        postal_code=bank.postal_code,
+        website=bank.website,
+    )
 
 
 @router.get("/companies", response_model=list[LookupItem])
@@ -169,18 +188,7 @@ async def post_bank(payload: BankCreateRequest, db: AsyncSession = Depends(get_d
     except SQLAlchemyError as exc:
         await db.rollback()
         raise HTTPException(status_code=500, detail="Failed to create bank") from exc
-    return BankResponse(
-        id=bank.id,
-        name=bank.name,
-        short_name=bank.short_name,
-        swift_code=bank.swift_code,
-        country_code=bank.country_code,
-        address_line1=bank.address_line1,
-        address_line2=bank.address_line2,
-        city=bank.city,
-        postal_code=bank.postal_code,
-        website=bank.website,
-    )
+    return build_bank_response(bank)
 
 
 @router.get("/banks/overview", response_model=list[BankOverviewItem])
@@ -190,6 +198,46 @@ async def get_banks_overview(
     db: AsyncSession = Depends(get_db),
 ) -> list[BankOverviewItem]:
     return await list_bank_overview(db, query=query, limit=limit)
+
+
+@router.get("/banks/{bank_id}", response_model=BankResponse)
+async def get_bank(bank_id: int, db: AsyncSession = Depends(get_db)) -> BankResponse:
+    bank = await get_bank_detail(db, bank_id)
+    if bank is None:
+        raise HTTPException(status_code=404, detail="Bank not found")
+    return bank
+
+
+@router.put("/banks/{bank_id}", response_model=BankResponse)
+async def put_bank(
+    bank_id: int,
+    payload: BankCreateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> BankResponse:
+    try:
+        bank = await update_bank(db, bank_id, payload)
+        await db.commit()
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update bank") from exc
+
+    return build_bank_response(bank)
+
+
+@router.delete("/banks/{bank_id}", status_code=204)
+async def delete_bank_endpoint(bank_id: int, db: AsyncSession = Depends(get_db)) -> None:
+    try:
+        await delete_bank(db, bank_id)
+        await db.commit()
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Bank cannot be deleted because it has related records") from exc
 
 
 @router.get("/bank-accounts/overview", response_model=list[BankAccountOverviewItem])
@@ -263,6 +311,22 @@ async def put_bank_account(
         bank_id=account.bank_id,
         currency_code=account.currency_code,
     )
+
+
+@router.delete("/bank-accounts/{bank_account_id}", status_code=204)
+async def delete_bank_account_endpoint(bank_account_id: int, db: AsyncSession = Depends(get_db)) -> None:
+    try:
+        await delete_bank_account(db, bank_account_id)
+        await db.commit()
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=400,
+            detail="Bank account cannot be deleted because it has related records",
+        ) from exc
 
 
 @router.get("/clients", response_model=list[LookupItem])

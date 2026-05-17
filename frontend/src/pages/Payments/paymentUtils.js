@@ -96,32 +96,26 @@ export function getShortDisplayName(value) {
 
 export async function loadCompanyPaymentOptions(query) {
   const accounts = await loadLookup('companyBankAccounts', query, 100)
-  const seen = new Set()
 
   return accounts
+    .filter((account) => account.companyId)
     .map((account) => {
       const companyName = getShortDisplayName(account.companyName)
       const bankName = getShortDisplayName(account.bankName)
       const currencyCode = account.currencyCode || '-'
+      const accountLabel = getShortDisplayName(account.label)
 
       return {
-        key: `${account.companyId}:${account.bankId}:${account.currencyCode || ''}`,
+        key: `account-${account.value}`,
         value: account.companyId,
-        label: [companyName, bankName, currencyCode].filter(Boolean).join(' | '),
+        label: accountLabel || [companyName, bankName, currencyCode, `Account #${account.value}`].filter(Boolean).join(' | '),
         companyId: account.companyId,
         companyName: account.companyName,
         bankId: account.bankId,
         bankName: account.bankName,
         currencyCode: account.currencyCode,
+        bankAccountId: account.value,
       }
-    })
-    .filter((option) => {
-      const key = `${option.companyId}:${option.bankId}:${option.currencyCode || ''}`
-      if (!option.companyId || seen.has(key)) {
-        return false
-      }
-      seen.add(key)
-      return true
     })
 }
 

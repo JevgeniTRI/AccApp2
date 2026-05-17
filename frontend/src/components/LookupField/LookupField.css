@@ -119,3 +119,9 @@
     transform: rotate(360deg);
   }
 }
+
+@media (max-width: 560px) {
+  .lookup-field__panel {
+    max-width: calc(100vw - 24px);
+  }
+}

@@ -4,9 +4,9 @@ Backend-first foundation for an accounting system built with `FastAPI`, `SQLAlch
 
 ## Requirements
 
-- `Python 3.12+`
+- `Python 3.11+`
 - `Node.js` with `npm`
-- `PowerShell` for the commands below
+- `PowerShell` if you want to run the commands exactly as shown below
 
 ## Local Run
 

@@ -39,6 +39,7 @@ class PaymentRow(BaseModel):
     amount_eur: Decimal
     currency_code: str
     vat_amount_eur: Decimal | None = None
+    own_expense_amount_eur: Decimal | None = None
     income_expense_eur: Decimal | None = None
     payment_direction: PaymentDirection
     payment_kind: PaymentKind
@@ -76,6 +77,7 @@ class PaymentDetailResponse(BaseModel):
     amount_original: Decimal
     amount_eur: Decimal
     vat_amount_eur: Decimal | None = None
+    own_expense_amount_eur: Decimal | None = None
     company_commission_amount_eur: Decimal | None = None
     payment_direction: PaymentDirection
     payment_kind: PaymentKind
@@ -98,9 +100,11 @@ class PaymentCreateRequest(BaseModel):
     amount_original: Decimal = Field(gt=0)
     amount_eur: Decimal | None = Field(default=None, gt=0)
     vat_amount_eur: Decimal = Field(default=Decimal("0"), ge=0)
+    own_expense_amount_eur: Decimal = Decimal("0")
     company_commission_amount_eur: Decimal = Decimal("0")
     payment_direction: PaymentDirection
     related_company_id: int | None = None
+    related_company_name: str | None = Field(default=None, max_length=255)
     client_id: int | None = None
     counterparty_id: int | None = None
     counterparty_name: str | None = Field(default=None, max_length=255)

@@ -39,6 +39,14 @@ export async function fetchPayments(params) {
   return data
 }
 
+export async function downloadPaymentsExport(format, params) {
+  const response = await api.get(`/payments/export/${format}`, {
+    params,
+    responseType: 'blob',
+  })
+  return response
+}
+
 export async function fetchPaymentsMeta() {
   const { data } = await api.get('/payments/meta')
   return data

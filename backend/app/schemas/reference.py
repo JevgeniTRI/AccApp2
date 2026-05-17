@@ -300,7 +300,7 @@ class ClientDetailResponse(BaseModel):
 
 
 class CounterpartyCreateRequest(BaseModel):
-    client_id: int
+    client_id: int | None = None
     legal_name: str = Field(min_length=1, max_length=255)
     short_name: str | None = Field(default=None, max_length=128)
     registration_number: str | None = Field(default=None, max_length=64)
@@ -319,15 +319,15 @@ class CounterpartyCreateRequest(BaseModel):
 
 class CounterpartyResponse(BaseModel):
     id: int
-    client_id: int
+    client_id: int | None = None
     legal_name: str
     short_name: str | None = None
 
 
 class CounterpartyOverviewItem(BaseModel):
     id: int
-    client_id: int
-    client_name: str
+    client_id: int | None = None
+    client_name: str | None = None
     legal_name: str
     short_name: str | None = None
     registration_number: str | None = None
@@ -341,8 +341,8 @@ class CounterpartyOverviewItem(BaseModel):
 
 class CounterpartyDetailResponse(BaseModel):
     id: int
-    client_id: int
-    client_name: str
+    client_id: int | None = None
+    client_name: str | None = None
     legal_name: str
     short_name: str | None = None
     registration_number: str | None = None

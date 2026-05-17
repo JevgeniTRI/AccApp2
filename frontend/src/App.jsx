@@ -1,19 +1,20 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import BankAccountCreatePage from './pages/Banks/BankAccountCreatePage'
-import BankCreatePage from './pages/Banks/BankCreatePage'
-import BanksPage from './pages/Banks/BanksPage'
-import ClientCreatePage from './pages/Clients/ClientCreatePage'
-import ClientsPage from './pages/Clients/ClientsPage'
-import CounterpartiesPage from './pages/Counterparties/CounterpartiesPage'
-import CounterpartyCreatePage from './pages/Counterparties/CounterpartyCreatePage'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import Navbar from './components/Navbar/Navbar'
-import CompanyCreatePage from './pages/Companies/CompanyCreatePage'
-import CompaniesPage from './pages/Companies/CompaniesPage'
-import AddPaymentsPage from './pages/Payments/AddPaymentsPage'
-import PaymentsPage from './pages/Payments/PaymentsPage'
 import LoginPage from './pages/Login/LoginPage'
 import { fetchCurrentUser, login, logout } from './lib/api'
+
+const BankAccountCreatePage = lazy(() => import('./pages/Banks/BankAccountCreatePage'))
+const BankCreatePage = lazy(() => import('./pages/Banks/BankCreatePage'))
+const BanksPage = lazy(() => import('./pages/Banks/BanksPage'))
+const ClientCreatePage = lazy(() => import('./pages/Clients/ClientCreatePage'))
+const ClientsPage = lazy(() => import('./pages/Clients/ClientsPage'))
+const CompanyCreatePage = lazy(() => import('./pages/Companies/CompanyCreatePage'))
+const CompaniesPage = lazy(() => import('./pages/Companies/CompaniesPage'))
+const CounterpartiesPage = lazy(() => import('./pages/Counterparties/CounterpartiesPage'))
+const CounterpartyCreatePage = lazy(() => import('./pages/Counterparties/CounterpartyCreatePage'))
+const AddPaymentsPage = lazy(() => import('./pages/Payments/AddPaymentsPage'))
+const PaymentsPage = lazy(() => import('./pages/Payments/PaymentsPage'))
 
 function PlaceholderPage({ title }) {
   return (
@@ -84,27 +85,29 @@ function App() {
     <div className="app-shell">
       <Navbar user={authState.user} onLogout={handleLogout} />
       <main className="app-main">
-        <Routes>
-          <Route path="/" element={<PlaceholderPage title="Главная" />} />
-          <Route path="/payments" element={<PaymentsPage />} />
-          <Route path="/payments/new" element={<AddPaymentsPage />} />
-          <Route path="/payments/:paymentId/edit" element={<AddPaymentsPage />} />
-          <Route path="/companies" element={<CompaniesPage />} />
-          <Route path="/companies/new" element={<CompanyCreatePage />} />
-          <Route path="/companies/:companyId/edit" element={<CompanyCreatePage />} />
-          <Route path="/banks" element={<BanksPage />} />
-          <Route path="/banks/new-bank" element={<BankCreatePage />} />
-          <Route path="/banks/bank/:bankId/edit" element={<BankCreatePage />} />
-          <Route path="/banks/new" element={<BankAccountCreatePage />} />
-          <Route path="/banks/:bankAccountId/edit" element={<BankAccountCreatePage />} />
-          <Route path="/clients" element={<ClientsPage />} />
-          <Route path="/clients/new" element={<ClientCreatePage />} />
-          <Route path="/clients/:clientId/edit" element={<ClientCreatePage />} />
-          <Route path="/counterparties" element={<CounterpartiesPage />} />
-          <Route path="/counterparties/new" element={<CounterpartyCreatePage />} />
-          <Route path="/counterparties/:counterpartyId/edit" element={<CounterpartyCreatePage />} />
-          <Route path="*" element={<Navigate to="/payments" replace />} />
-        </Routes>
+        <Suspense fallback={<div className="auth-loading">Загружаем раздел...</div>}>
+          <Routes>
+            <Route path="/" element={<PlaceholderPage title="Главная" />} />
+            <Route path="/payments" element={<PaymentsPage />} />
+            <Route path="/payments/new" element={<AddPaymentsPage />} />
+            <Route path="/payments/:paymentId/edit" element={<AddPaymentsPage />} />
+            <Route path="/companies" element={<CompaniesPage />} />
+            <Route path="/companies/new" element={<CompanyCreatePage />} />
+            <Route path="/companies/:companyId/edit" element={<CompanyCreatePage />} />
+            <Route path="/banks" element={<BanksPage />} />
+            <Route path="/banks/new-bank" element={<BankCreatePage />} />
+            <Route path="/banks/bank/:bankId/edit" element={<BankCreatePage />} />
+            <Route path="/banks/new" element={<BankAccountCreatePage />} />
+            <Route path="/banks/:bankAccountId/edit" element={<BankAccountCreatePage />} />
+            <Route path="/clients" element={<ClientsPage />} />
+            <Route path="/clients/new" element={<ClientCreatePage />} />
+            <Route path="/clients/:clientId/edit" element={<ClientCreatePage />} />
+            <Route path="/counterparties" element={<CounterpartiesPage />} />
+            <Route path="/counterparties/new" element={<CounterpartyCreatePage />} />
+            <Route path="/counterparties/:counterpartyId/edit" element={<CounterpartyCreatePage />} />
+            <Route path="*" element={<Navigate to="/payments" replace />} />
+          </Routes>
+        </Suspense>
       </main>
     </div>
   )

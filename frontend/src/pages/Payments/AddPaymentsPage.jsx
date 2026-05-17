@@ -63,6 +63,7 @@ function createRow() {
     counterpartyName: '',
     amount: '',
     tax: '',
+    ownExpense: '',
     incomeExpense: '',
     clientText: '',
     comment: '',
@@ -93,6 +94,15 @@ function buildRowNotes(row) {
   return row.comment.trim() || null
 }
 
+function isAccountTransferRow(row, bankAccount) {
+  return (
+    row.partyType === 'company' &&
+    row.relatedCompany?.bankAccountId &&
+    bankAccount?.value &&
+    Number(row.relatedCompany.bankAccountId) !== Number(bankAccount.value)
+  )
+}
+
 function rowHasData(row) {
   const partyValues =
     row.partyType === 'company'
@@ -106,6 +116,7 @@ function rowHasData(row) {
     row.comment.trim() ||
     row.amount ||
     row.tax ||
+    row.ownExpense ||
     row.incomeExpense ||
     row.attachments.length > 0
   )
@@ -155,6 +166,7 @@ function createRowFromPayment(payment) {
     counterpartyName: payment.counterparty?.name || '',
     amount: String(signedAmount),
     tax: payment.vat_amount_eur ? String(toNumber(payment.vat_amount_eur)) : '',
+    ownExpense: payment.own_expense_amount_eur ? String(toNumber(payment.own_expense_amount_eur)) : '',
     incomeExpense: payment.company_commission_amount_eur ? String(toNumber(payment.company_commission_amount_eur)) : '',
     clientText: payment.client?.name || '',
     comment: payment.notes || '',
@@ -340,15 +352,21 @@ export default function AddPaymentsPage() {
   const totals = useMemo(() => {
     const incoming = formState.rows.reduce((total, row) => {
       const amount = toNumber(row.amount)
+      if (isAccountTransferRow(row, formState.bankAccount)) {
+        return total
+      }
       return amount > 0 ? total + amount : total
     }, 0)
     const outgoing = formState.rows.reduce((total, row) => {
       const amount = toNumber(row.amount)
+      if (isAccountTransferRow(row, formState.bankAccount)) {
+        return amount ? total + Math.abs(amount) : total
+      }
       return amount < 0 ? total + Math.abs(amount) : total
     }, 0)
 
     return { incoming, outgoing, net: incoming - outgoing }
-  }, [formState.rows])
+  }, [formState.bankAccount, formState.rows])
 
   const projectedBalance = balanceState.balance + totals.net
   const balanceCurrency = balanceState.currencyCode || formState.bankAccount?.currencyCode || 'EUR'
@@ -463,6 +481,50 @@ export default function AddPaymentsPage() {
     return liveMatch
   }
 
+  async function resolveRelatedCompanyOption(row) {
+    if (row.relatedCompany?.bankAccountId) {
+      return row.relatedCompany
+    }
+
+    if (row.relatedCompany && row.relatedCompanyText === row.relatedCompany.label) {
+      return row.relatedCompany
+    }
+
+    const normalizedText = row.relatedCompanyText.trim()
+    const seedOptions = [
+      ...(optionsState.companyPaymentOptions || []),
+      ...optionsState.companies,
+    ]
+    const seedMatch = findLookupOption('companies', normalizedText, seedOptions)
+    if (seedMatch?.bankAccountId) {
+      return seedMatch
+    }
+
+    const liveAccountOptions = await loadCompanyPaymentOptions(normalizedText)
+    const liveAccountMatch = findLookupOption('companies', normalizedText, liveAccountOptions)
+    if (liveAccountMatch?.bankAccountId) {
+      return liveAccountMatch
+    }
+
+    const existingCompany = await resolveLookupOption(
+      'companies',
+      row.relatedCompanyText,
+      seedOptions,
+      '',
+    ).catch(() => null)
+
+    if (existingCompany) {
+      return existingCompany
+    }
+
+    return {
+      value: null,
+      label: normalizedText,
+      companyName: normalizedText,
+      isNew: true,
+    }
+  }
+
   async function handleSave() {
     setMessage({ type: '', text: '' })
     setIsSaving(true)
@@ -494,17 +556,7 @@ export default function AddPaymentsPage() {
 
         const relatedCompany =
           row.partyType === 'company'
-            ? row.relatedCompany && row.relatedCompanyText === row.relatedCompany.label
-              ? row.relatedCompany
-              : await resolveLookupOption(
-                  'companies',
-                  row.relatedCompanyText,
-                  [
-                    ...(optionsState.companyPaymentOptions || []),
-                    ...optionsState.companies,
-                  ],
-                  `Компания "${row.relatedCompanyText.trim()}" не найдена в справочнике`,
-                )
+            ? await resolveRelatedCompanyOption(row)
             : null
 
         const client =
@@ -521,49 +573,77 @@ export default function AddPaymentsPage() {
           if (!relatedCompany) {
             throw new Error('Для типа "Компания" нужно выбрать компанию из справочника')
           }
-          if (relatedCompany.value === bankAccount.companyId) {
-            throw new Error('Компания в строке должна отличаться от компании выбранного счёта')
-          }
         }
 
         if (row.partyType === 'clientCounterparty') {
           if (!client) {
             throw new Error('Для типа "Клиент + контрагент" нужно выбрать клиента')
           }
-          if (!row.counterpartyName.trim()) {
-            throw new Error('Для типа "Клиент + контрагент" нужно указать контрагента')
-          }
         }
 
         const counterpartyName = row.partyType === 'company' ? null : row.counterpartyName.trim() || null
         const paymentPurpose =
           row.partyType === 'company' ? relatedCompany?.label || null : counterpartyName || null
-
-        items.push({
-          company_bank_account_id: bankAccount.value,
+        const attachments = row.attachments
+          .filter((attachment) => !attachment.existingAttachmentId)
+          .map((attachment) => ({
+            file_name: attachment.fileName,
+            content_type: attachment.contentType,
+            file_content_base64: attachment.base64,
+          }))
+        const keepAttachmentIds = row.attachments
+          .filter((attachment) => Number.isInteger(attachment.existingAttachmentId))
+          .map((attachment) => attachment.existingAttachmentId)
+        const basePaymentItem = {
           booking_date: formState.bookingDate,
           value_date: formState.bookingDate,
           transaction_date: formState.bookingDate,
           amount_original: Math.abs(amount),
-          amount_eur: bankAccount.currencyCode === 'EUR' ? null : Math.abs(amount),
           vat_amount_eur: Math.abs(toNumber(row.tax)),
+          own_expense_amount_eur: toNumber(row.ownExpense),
           company_commission_amount_eur: toNumber(row.incomeExpense),
-          payment_direction: amount >= 0 ? 'incoming' : 'outgoing',
-          related_company_id: relatedCompany?.value ?? null,
           client_id: client?.value ?? null,
           counterparty_name: counterpartyName,
           payment_purpose: paymentPurpose,
           notes: buildRowNotes(row),
-          keep_attachment_ids: row.attachments
-            .filter((attachment) => Number.isInteger(attachment.existingAttachmentId))
-            .map((attachment) => attachment.existingAttachmentId),
-          attachments: row.attachments
-            .filter((attachment) => !attachment.existingAttachmentId)
-            .map((attachment) => ({
-            file_name: attachment.fileName,
-            content_type: attachment.contentType,
-            file_content_base64: attachment.base64,
-            })),
+          keep_attachment_ids: keepAttachmentIds,
+          attachments,
+        }
+
+        if (isAccountTransferRow({ ...row, relatedCompany }, bankAccount)) {
+          items.push({
+            ...basePaymentItem,
+            company_bank_account_id: bankAccount.value,
+            amount_eur: bankAccount.currencyCode === 'EUR' ? null : Math.abs(amount),
+            vat_amount_eur: 0,
+            own_expense_amount_eur: 0,
+            company_commission_amount_eur: 0,
+            payment_direction: 'outgoing',
+            related_company_id: relatedCompany.value,
+          })
+          items.push({
+            ...basePaymentItem,
+            company_bank_account_id: relatedCompany.bankAccountId,
+            amount_eur: relatedCompany.currencyCode === 'EUR' ? null : Math.abs(amount),
+            vat_amount_eur: 0,
+            own_expense_amount_eur: 0,
+            company_commission_amount_eur: 0,
+            payment_direction: 'incoming',
+            related_company_id: bankAccount.companyId ?? null,
+            payment_purpose: bankAccount.label || bankAccount.companyName || paymentPurpose,
+            keep_attachment_ids: [],
+            attachments: [],
+          })
+          continue
+        }
+
+        items.push({
+          ...basePaymentItem,
+          company_bank_account_id: bankAccount.value,
+          amount_eur: bankAccount.currencyCode === 'EUR' ? null : Math.abs(amount),
+          payment_direction: amount >= 0 ? 'incoming' : 'outgoing',
+          related_company_id: relatedCompany?.value ?? null,
+          related_company_name: relatedCompany?.value ? null : relatedCompany?.label || null,
         })
       }
 
@@ -842,6 +922,7 @@ export default function AddPaymentsPage() {
                   <th>Контрагент</th>
                   <th>Сумма</th>
                   <th>Налог</th>
+                  <th>Свои расходы</th>
                   <th>Доходы/Расходы</th>
                   <th>Клиент</th>
                   <th>Комментарий</th>
@@ -960,6 +1041,16 @@ export default function AddPaymentsPage() {
                           <input
                             type="number"
                             step="0.01"
+                            value={row.ownExpense}
+                            onChange={(event) => updateRow(row.id, { ownExpense: event.target.value })}
+                            placeholder="-"
+                            className={toNumber(row.ownExpense) > 0 ? 'is-positive' : ''}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            step="0.01"
                             value={row.incomeExpense}
                             onChange={(event) => updateRow(row.id, { incomeExpense: event.target.value })}
                             placeholder="-"
@@ -1037,7 +1128,7 @@ export default function AddPaymentsPage() {
                       {row.expanded ? (
                         <tr className="add-payments-breakdown-row">
                           <td />
-                          <td colSpan={9}>
+                          <td colSpan={10}>
                             <div className="add-payments-breakdown">
                               <div>
                                 <span>Сумма без налога:</span>
@@ -1050,6 +1141,10 @@ export default function AddPaymentsPage() {
                               <div>
                                 <span>Сумма с налогом:</span>
                                 <strong>{formatAmount(Math.abs(amount))}</strong>
+                              </div>
+                              <div>
+                                <span>Свои расходы:</span>
+                                <strong>{formatAmount(toNumber(row.ownExpense))}</strong>
                               </div>
                               <div>
                                 <span>В ваш зачёт:</span>

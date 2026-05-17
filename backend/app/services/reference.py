@@ -942,7 +942,7 @@ async def search_counterparties(db: AsyncSession, query: str | None, limit: int)
     stmt = (
         select(Counterparty)
         .options(selectinload(Counterparty.client))
-        .join(Counterparty.client)
+        .outerjoin(Counterparty.client)
         .order_by(Counterparty.legal_name.asc())
         .limit(limit)
     )
@@ -964,12 +964,12 @@ async def search_counterparties(db: AsyncSession, query: str | None, limit: int)
 
 
 async def create_counterparty(db: AsyncSession, payload: CounterpartyCreateRequest) -> Counterparty:
-    client = await db.get(Client, payload.client_id)
-    if client is None:
+    client = await db.get(Client, payload.client_id) if payload.client_id is not None else None
+    if payload.client_id is not None and client is None:
         raise ValueError("Client not found")
 
     counterparty = Counterparty(
-        client_id=client.id,
+        client_id=client.id if client is not None else None,
         legal_name=payload.legal_name.strip(),
         short_name=payload.short_name.strip() if payload.short_name else None,
         registration_number=payload.registration_number.strip() if payload.registration_number else None,
@@ -999,7 +999,7 @@ async def list_counterparty_overview(
     stmt = (
         select(Counterparty)
         .options(selectinload(Counterparty.client))
-        .join(Counterparty.client)
+        .outerjoin(Counterparty.client)
         .order_by(Counterparty.legal_name.asc())
         .limit(limit)
     )
@@ -1026,7 +1026,7 @@ async def list_counterparty_overview(
         CounterpartyOverviewItem(
             id=counterparty.id,
             client_id=counterparty.client_id,
-            client_name=counterparty.client.full_name if counterparty.client is not None else str(counterparty.client_id),
+            client_name=counterparty.client.full_name if counterparty.client is not None else None,
             legal_name=counterparty.legal_name,
             short_name=counterparty.short_name,
             registration_number=counterparty.registration_number,
@@ -1055,7 +1055,7 @@ async def get_counterparty_detail(db: AsyncSession, counterparty_id: int) -> Cou
     return CounterpartyDetailResponse(
         id=counterparty.id,
         client_id=counterparty.client_id,
-        client_name=counterparty.client.full_name if counterparty.client is not None else str(counterparty.client_id),
+        client_name=counterparty.client.full_name if counterparty.client is not None else None,
         legal_name=counterparty.legal_name,
         short_name=counterparty.short_name,
         registration_number=counterparty.registration_number,
@@ -1082,11 +1082,11 @@ async def update_counterparty(
     if counterparty is None:
         raise ValueError("Counterparty not found")
 
-    client = await db.get(Client, payload.client_id)
-    if client is None:
+    client = await db.get(Client, payload.client_id) if payload.client_id is not None else None
+    if payload.client_id is not None and client is None:
         raise ValueError("Client not found")
 
-    counterparty.client_id = client.id
+    counterparty.client_id = client.id if client is not None else None
     counterparty.legal_name = payload.legal_name.strip()
     counterparty.short_name = payload.short_name.strip() if payload.short_name else None
     counterparty.registration_number = payload.registration_number.strip() if payload.registration_number else None

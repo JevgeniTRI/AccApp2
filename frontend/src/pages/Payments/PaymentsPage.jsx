@@ -14,7 +14,7 @@ import {
   TableEmpty,
   TableWrap,
 } from '../../components/ui'
-import { buildPaymentAttachmentUrl, deletePayment, fetchPayments, fetchPaymentsMeta } from '../../lib/api'
+import { buildPaymentAttachmentUrl, deletePayment, downloadPaymentsExport, fetchPayments, fetchPaymentsMeta } from '../../lib/api'
 import {
   formatAmount,
   formatDate,
@@ -43,7 +43,7 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
           <th>Банк</th>
           <th>Контрагент</th>
           <th>Сумма</th>
-          <th>Валюта</th>
+          <th>Свои расходы</th>
           <th>Налог</th>
           <th>Доходы/Расходы</th>
           <th>Клиент</th>
@@ -76,7 +76,7 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
               <td className={`payments-table__amount ${amountClass}`}>
                 {formatAmount(payment.signed_amount, payment.currency_code)}
               </td>
-              <td>{payment.currency_code}</td>
+              <td>{payment.own_expense_amount_eur ? formatAmount(payment.own_expense_amount_eur) : '-'}</td>
               <td>{payment.vat_amount_eur ? formatAmount(payment.vat_amount_eur) : '-'}</td>
               <td>{payment.income_expense_eur ? formatAmount(payment.income_expense_eur) : '-'}</td>
               <td>{payment.client?.name || '-'}</td>
@@ -122,6 +122,7 @@ export default function PaymentsPage() {
     total: 0,
     items: [],
   })
+  const [exportState, setExportState] = useState({ isLoading: false, error: '' })
   const [filters, setFilters] = useState({
     dateFrom: '',
     dateTo: toDateInputValue(new Date()),
@@ -139,6 +140,28 @@ export default function PaymentsPage() {
   })
 
   const deferredSearch = useDeferredValue(filters.search)
+
+  const paymentsQuery = useMemo(() => ({
+    date_from: filters.dateFrom || undefined,
+    date_to: filters.dateTo || undefined,
+    search: deferredSearch || undefined,
+    company_id: filters.company?.value,
+    bank_id: filters.bank?.value,
+    currency_code: filters.currency?.rawLabel || filters.currency?.value,
+    client_id: filters.client?.value,
+    include_incoming: filters.includeIncoming,
+    include_outgoing: filters.includeOutgoing,
+  }), [
+    deferredSearch,
+    filters.bank,
+    filters.client,
+    filters.company,
+    filters.currency,
+    filters.dateFrom,
+    filters.dateTo,
+    filters.includeIncoming,
+    filters.includeOutgoing,
+  ])
 
   useEffect(() => {
     let isCancelled = false
@@ -172,15 +195,7 @@ export default function PaymentsPage() {
 
       try {
         const data = await fetchPayments({
-          date_from: filters.dateFrom || undefined,
-          date_to: filters.dateTo || undefined,
-          search: deferredSearch || undefined,
-          company_id: filters.company?.value,
-          bank_id: filters.bank?.value,
-          currency_code: filters.currency?.rawLabel || filters.currency?.value,
-          client_id: filters.client?.value,
-          include_incoming: filters.includeIncoming,
-          include_outgoing: filters.includeOutgoing,
+          ...paymentsQuery,
           limit: 200,
           offset: 0,
         })
@@ -210,18 +225,7 @@ export default function PaymentsPage() {
     return () => {
       isCancelled = true
     }
-  }, [
-    deferredSearch,
-    filters.bank,
-    filters.client,
-    filters.company,
-    filters.currency,
-    filters.dateFrom,
-    filters.dateTo,
-    filters.includeIncoming,
-    filters.includeOutgoing,
-    refreshKey,
-  ])
+  }, [paymentsQuery, refreshKey])
 
   const summary = useMemo(() => {
     const incomeTotal = paymentsState.items
@@ -244,6 +248,35 @@ export default function PaymentsPage() {
       [`${keyPrefix}Text`]: nextText,
       [keyPrefix]: current[keyPrefix] && nextText !== current[keyPrefix].label ? null : current[keyPrefix],
     }))
+  }
+
+  function getExportFilename(response, fallback) {
+    const disposition = response.headers?.['content-disposition'] || ''
+    const match = disposition.match(/filename="?([^";]+)"?/i)
+    return match?.[1] || fallback
+  }
+
+  async function handleExport(format) {
+    const extension = format === 'pdf' ? 'pdf' : 'xlsx'
+    setExportState({ isLoading: true, error: '' })
+
+    try {
+      const response = await downloadPaymentsExport(format, paymentsQuery)
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = getExportFilename(response, `payments.${extension}`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setExportState({ isLoading: false, error: '' })
+    } catch (error) {
+      setExportState({
+        isLoading: false,
+        error: error.response?.data?.detail || 'Не удалось скачать файл',
+      })
+    }
   }
 
   async function handleDelete(paymentId) {
@@ -400,7 +433,10 @@ export default function PaymentsPage() {
                 {filters.dateFrom || '...'} - {filters.dateTo || '...'}
               </strong>
             </div>
-            <div>{paymentsState.error ? <span className="payments-status__error">{paymentsState.error}</span> : null}</div>
+            <div>
+              {paymentsState.error ? <span className="payments-status__error">{paymentsState.error}</span> : null}
+              {exportState.error ? <span className="payments-status__error">{exportState.error}</span> : null}
+            </div>
           </div>
 
           <TableWrap>
@@ -435,9 +471,25 @@ export default function PaymentsPage() {
 
       <ExportActions
         actions={[
-          { label: 'Скачать Excel', badge: 'XLS' },
-          { label: 'Скачать PDF', badge: 'PDF' },
-          { label: 'Экспорт', icon: <Download size={14} /> },
+          {
+            label: exportState.isLoading ? 'Скачивание...' : 'Скачать Excel',
+            badge: 'XLS',
+            disabled: exportState.isLoading,
+            onClick: () => handleExport('excel'),
+          },
+          {
+            label: exportState.isLoading ? 'Скачивание...' : 'Скачать PDF',
+            badge: 'PDF',
+            disabled: exportState.isLoading,
+            onClick: () => handleExport('pdf'),
+          },
+          {
+            label: 'Экспорт',
+            icon: <Download size={14} />,
+            disabled: exportState.isLoading,
+            onClick: () => handleExport('excel'),
+            title: 'Скачать Excel',
+          },
         ]}
       />
     </PageShell>

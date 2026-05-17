@@ -78,6 +78,8 @@ class PaymentFinancialBreakdown(BigIntPrimaryKeyMixin, TimestampMixin, Base):
     base_after_vat_eur: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     company_commission_amount_original: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
     company_commission_amount_eur: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    own_expense_amount_original: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    own_expense_amount_eur: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     client_commission_amount_original: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
     client_commission_amount_eur: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     net_client_balance_effect_eur: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)

@@ -116,7 +116,14 @@ export function ExportActions({ actions, className = '' }) {
   return (
     <div className={classNames('ui-export-actions', className)}>
       {actions.map((action) => (
-        <Button key={action.label} className="ui-export-button" onClick={action.onClick} variant="ghost">
+        <Button
+          key={action.label}
+          className="ui-export-button"
+          disabled={action.disabled}
+          onClick={action.onClick}
+          title={action.title}
+          variant="ghost"
+        >
           {action.label}
           {action.badge ? <span className="ui-export-button__badge">{action.badge}</span> : null}
           {action.icon || null}

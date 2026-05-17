@@ -76,6 +76,7 @@ async def list_payments(
             Client.id.label("client_id"),
             Client.full_name.label("client_name"),
             PaymentFinancialBreakdown.vat_amount_eur,
+            PaymentFinancialBreakdown.own_expense_amount_eur,
             PaymentFinancialBreakdown.company_commission_amount_eur,
         )
         .join(Company, Company.id == Payment.company_id)
@@ -253,6 +254,9 @@ async def get_payment_detail(db: AsyncSession, payment_id: int) -> PaymentDetail
         amount_original=payment.amount_original,
         amount_eur=payment.amount_eur,
         vat_amount_eur=breakdown.vat_amount_eur if breakdown is not None else None,
+        own_expense_amount_eur=(
+            breakdown.own_expense_amount_eur if breakdown is not None else None
+        ),
         company_commission_amount_eur=(
             breakdown.company_commission_amount_eur if breakdown is not None else None
         ),
@@ -442,8 +446,10 @@ async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateReques
         related_company = await db.get(Company, payload.related_company_id)
         if related_company is None:
             raise PaymentValidationError("Related company not found")
-        if related_company.id == company.id:
-            raise PaymentValidationError("Related company must differ from the bank account company")
+    elif payload.related_company_name:
+        related_company = await get_or_create_company(db, payload.related_company_name)
+    if related_company is not None and related_company.id == company.id:
+        raise PaymentValidationError("Related company must differ from the bank account company")
 
     client = None
     counterparty = None
@@ -466,13 +472,19 @@ async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateReques
         elif payload.counterparty_name:
             counterparty = await get_or_create_counterparty(db, client.id, payload.counterparty_name)
             counterparty_name = get_counterparty_display_name(counterparty)
-        else:
-            raise PaymentValidationError("Client payment requires counterparty_id or counterparty_name")
 
         await ensure_company_client_link(db, company.id, client.id)
     else:
         if payload.counterparty_id is not None:
-            raise PaymentValidationError("counterparty_id requires client_id")
+            counterparty = await db.get(Counterparty, payload.counterparty_id)
+            if counterparty is None:
+                raise PaymentValidationError("Counterparty not found")
+            if counterparty.client_id is not None:
+                raise PaymentValidationError("counterparty_id requires client_id when counterparty belongs to a client")
+            counterparty_name = get_counterparty_display_name(counterparty)
+        elif counterparty_name:
+            counterparty = await get_or_create_counterparty(db, None, counterparty_name)
+            counterparty_name = get_counterparty_display_name(counterparty)
 
     amount_eur = payload.amount_eur
     if amount_eur is None:
@@ -513,6 +525,7 @@ async def upsert_payment_financial_breakdown(
     breakdown = existing_result.scalar_one_or_none()
 
     vat_amount_eur = payload.vat_amount_eur
+    own_expense_amount_eur = payload.own_expense_amount_eur
     company_commission_amount_eur = payload.company_commission_amount_eur
     base_after_vat_eur = payment.amount_eur - vat_amount_eur
     gross_amount_original = payment.amount_original
@@ -523,6 +536,7 @@ async def upsert_payment_financial_breakdown(
     company_commission_amount_original = (
         company_commission_amount_eur if currency_code == "EUR" else None
     )
+    own_expense_amount_original = own_expense_amount_eur if currency_code == "EUR" else None
 
     values = {
         "gross_amount_original": gross_amount_original,
@@ -533,6 +547,8 @@ async def upsert_payment_financial_breakdown(
         "base_after_vat_eur": base_after_vat_eur,
         "company_commission_amount_original": company_commission_amount_original,
         "company_commission_amount_eur": company_commission_amount_eur,
+        "own_expense_amount_original": own_expense_amount_original,
+        "own_expense_amount_eur": own_expense_amount_eur,
         "client_commission_amount_original": None,
         "client_commission_amount_eur": Decimal("0"),
         "net_client_balance_effect_eur": base_after_vat_eur + company_commission_amount_eur,
@@ -568,11 +584,32 @@ async def ensure_company_client_link(db: AsyncSession, company_id: int, client_i
     await db.flush()
 
 
-async def get_or_create_counterparty(db: AsyncSession, client_id: int, name: str) -> Counterparty:
+async def get_or_create_company(db: AsyncSession, name: str) -> Company:
     normalized_name = name.strip()
+    if not normalized_name:
+        raise PaymentValidationError("Related company name is empty")
+
+    result = await db.execute(
+        select(Company).where(func.lower(Company.legal_name) == normalized_name.lower())
+    )
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        return existing
+
+    company = Company(legal_name=normalized_name, status="active")
+    db.add(company)
+    await db.flush()
+    return company
+
+
+async def get_or_create_counterparty(db: AsyncSession, client_id: int | None, name: str) -> Counterparty:
+    normalized_name = name.strip()
+    if not normalized_name:
+        raise PaymentValidationError("Counterparty name is empty")
+
     result = await db.execute(
         select(Counterparty).where(
-            Counterparty.client_id == client_id,
+            Counterparty.client_id.is_(None) if client_id is None else Counterparty.client_id == client_id,
             func.lower(Counterparty.legal_name) == normalized_name.lower(),
         )
     )

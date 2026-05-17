@@ -531,7 +531,7 @@
   }
 
   .payments-table td:nth-child(7)::before {
-    content: 'Валюта';
+    content: 'Свои расходы';
   }
 
   .payments-table td:nth-child(8)::before {

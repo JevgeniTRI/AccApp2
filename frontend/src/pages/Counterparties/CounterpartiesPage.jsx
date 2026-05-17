@@ -99,7 +99,7 @@ export default function CounterpartiesPage() {
     const text = [
       `Наименование: ${item.legal_name}`,
       `Короткое наименование: ${item.short_name || '-'}`,
-      `Клиент: ${item.client_name}`,
+      `Клиент: ${item.client_name || '-'}`,
       `Регистрационный номер: ${item.registration_number || '-'}`,
       `Страна: ${item.country_code || '-'}`,
       `Контакты: ${buildContactLabel(item)}`,
@@ -215,7 +215,7 @@ export default function CounterpartiesPage() {
                         {item.legal_name}
                         {item.short_name ? <div className="counterparties-table__subname">{item.short_name}</div> : null}
                       </td>
-                      <td>{item.client_name}</td>
+                      <td>{item.client_name || '-'}</td>
                       <td>{item.registration_number || '-'}</td>
                       <td>{item.country_code || '-'}</td>
                       <td>{buildContactLabel(item)}</td>

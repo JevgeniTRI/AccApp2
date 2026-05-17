@@ -177,3 +177,32 @@
     align-items: stretch;
   }
 }
+
+@media (max-width: 560px) {
+  .bank-account-create-page {
+    padding: 16px 10px 22px;
+  }
+
+  .bank-account-create-heading h1 {
+    font-size: 22px;
+  }
+
+  .bank-account-create-heading p {
+    font-size: 13px;
+  }
+
+  .bank-account-create-card {
+    gap: 12px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .bank-account-create-section {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .bank-account-create-button {
+    width: 100%;
+  }
+}

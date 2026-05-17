@@ -189,3 +189,32 @@
     flex-direction: column;
   }
 }
+
+@media (max-width: 560px) {
+  .counterparty-create-page {
+    padding: 16px 10px 22px;
+  }
+
+  .counterparty-create-heading h1 {
+    font-size: 22px;
+  }
+
+  .counterparty-create-heading p {
+    font-size: 13px;
+  }
+
+  .counterparty-create-card {
+    gap: 12px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .counterparty-create-section {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .counterparty-create-button {
+    width: 100%;
+  }
+}

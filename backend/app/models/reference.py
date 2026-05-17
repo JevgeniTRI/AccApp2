@@ -134,7 +134,7 @@ class CompanyClient(BigIntPrimaryKeyMixin, TimestampMixin, Base):
 class Counterparty(BigIntPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "counterparties"
 
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id"), nullable=False, index=True)
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), index=True)
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
     short_name: Mapped[str | None] = mapped_column(String(128))
     registration_number: Mapped[str | None] = mapped_column(String(64))
@@ -150,4 +150,4 @@ class Counterparty(BigIntPrimaryKeyMixin, TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str | None] = mapped_column(String(32))
 
-    client: Mapped["Client"] = relationship(back_populates="counterparties")
+    client: Mapped["Client | None"] = relationship(back_populates="counterparties")

@@ -143,16 +143,18 @@ export default function CounterpartyCreatePage() {
         throw new Error('Поле "Наименование" обязательно')
       }
 
-      const client = requireLookupValue(
-        'clients',
-        null,
-        formState.clientText,
-        lookupState.clients,
-        'Нужно выбрать существующего клиента',
-      )
+      const client = formState.clientText.trim()
+        ? requireLookupValue(
+            'clients',
+            null,
+            formState.clientText,
+            lookupState.clients,
+            'Нужно выбрать существующего клиента или оставить поле клиента пустым',
+          )
+        : null
 
       const payload = {
-        client_id: client.value,
+        client_id: client?.value ?? null,
         legal_name: formState.legalName.trim(),
         short_name: formState.shortName.trim() || null,
         registration_number: formState.registrationNumber.trim() || null,
@@ -199,7 +201,7 @@ export default function CounterpartyCreatePage() {
           </button>
           <div>
             <h1>{isEditMode ? 'Редактировать контрагента' : 'Добавить контрагента'}</h1>
-            <p>Форма покрывает поля таблицы `counterparties` и обязательную связку с клиентом.</p>
+            <p>Форма покрывает данные контрагента; клиента можно привязать сейчас или позже.</p>
           </div>
         </div>
 
@@ -213,14 +215,13 @@ export default function CounterpartyCreatePage() {
             </div>
             <div className="counterparty-create-grid counterparty-create-grid--3">
               <label className="counterparty-create-field">
-                <span>Клиент *</span>
+                <span>Клиент</span>
                 <input
                   list="counterparty-client-options"
                   type="text"
                   value={formState.clientText}
                   onChange={(event) => updateField('clientText', event.target.value)}
-                  placeholder={lookupState.isLoading ? 'Загрузка...' : 'Выберите клиента из справочника'}
-                  required
+                  placeholder={lookupState.isLoading ? 'Загрузка...' : 'Можно оставить пустым'}
                 />
               </label>
               <label className="counterparty-create-field">

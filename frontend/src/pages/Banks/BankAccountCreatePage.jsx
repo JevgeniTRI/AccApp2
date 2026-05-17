@@ -135,8 +135,7 @@ export default function BankAccountCreatePage() {
   }, [bankAccountId, isEditMode, searchParams])
 
   function updateField(name, value) {
-    setFormState((current) => ({ ...current, [name]: value }))
-  }
+    setFormState((current) => ({ ...current, [name]: value }
 
   async function handleSubmit(event) {
     event.preventDefault()

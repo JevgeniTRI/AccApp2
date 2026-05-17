@@ -32,6 +32,13 @@ from app.services.payments import (
     list_payments,
     update_payment,
 )
+from app.services.payment_exports import (
+    build_payments_pdf,
+    build_payments_xlsx,
+    describe_export_period,
+    payment_export_filename,
+    prepare_payment_export_rows,
+)
 
 
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -89,6 +96,7 @@ async def get_payments(
                 amount_eur=row["amount_eur"],
                 currency_code=row["currency_code"],
                 vat_amount_eur=row["vat_amount_eur"],
+                own_expense_amount_eur=row["own_expense_amount_eur"],
                 income_expense_eur=row["company_commission_amount_eur"],
                 payment_direction=row["payment_direction"],
                 payment_kind=row["payment_kind"],
@@ -116,6 +124,61 @@ async def get_payments(
 async def get_payments_meta(db: AsyncSession = Depends(get_db)) -> PaymentFiltersMetaResponse:
     earliest_booking_date = await get_earliest_payment_booking_date(db)
     return PaymentFiltersMetaResponse(earliest_booking_date=earliest_booking_date)
+
+
+@router.get("/export/{export_format}")
+async def export_payments(
+    export_format: str,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    search: str | None = None,
+    company_id: int | None = None,
+    bank_id: int | None = None,
+    currency_code: str | None = None,
+    client_id: int | None = None,
+    include_incoming: bool = True,
+    include_outgoing: bool = True,
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    _, rows = await list_payments(
+        db,
+        date_from=date_from,
+        date_to=date_to,
+        search=search,
+        company_id=company_id,
+        bank_id=bank_id,
+        currency_code=currency_code,
+        client_id=client_id,
+        include_incoming=include_incoming,
+        include_outgoing=include_outgoing,
+        limit=10000,
+        offset=0,
+    )
+    export_rows = prepare_payment_export_rows(rows)
+
+    if export_format == "excel":
+        content = build_payments_xlsx(export_rows)
+        filename = payment_export_filename("xlsx")
+        media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    elif export_format == "pdf":
+        try:
+            content = build_payments_pdf(
+                export_rows,
+                title="Платежи",
+                subtitle=describe_export_period(date_from, date_to),
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        filename = payment_export_filename("pdf")
+        media_type = "application/pdf"
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported export format")
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("", response_model=PaymentCreateResponse, status_code=201)

@@ -297,7 +297,7 @@ export default function PaymentsPage() {
   }
 
   return (
-    <PageShell>
+    <PageShell className="payments-page">
       <PageHeader title="Платежи" onBack={() => navigate(-1)} />
 
         <DataCard>

@@ -1,9 +1,10 @@
 .add-payments-page {
-  padding: 28px 24px 32px;
+  padding: 28px 5px 32px;
 }
 
 .add-payments-shell {
-  max-width: 1440px;
+  width: 100%;
+  max-width: none;
   margin: 0 auto;
 }
 
@@ -150,7 +151,7 @@
 
 .add-payments-table {
   width: 100%;
-  min-width: 1240px;
+  min-width: 1420px;
   border-collapse: collapse;
 }
 
@@ -279,6 +280,28 @@
   min-height: 38px;
   color: var(--muted-text);
 }
+
+.add-payments-money-field {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) 82px;
+  align-items: center;
+  gap: 4px;
+  min-width: 154px;
+}
+
+.add-payments-money-field input,
+.add-payments-money-field select {
+  min-width: 0;
+}
+
+.add-payments-table td .add-payments-currency-select {
+  width: 82px;
+  padding: 8px 6px;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 
 .add-payments-table td input.is-positive {
   color: var(--positive-text);
@@ -439,7 +462,7 @@
 
 @media (max-width: 980px) {
   .add-payments-page {
-    padding: 20px 14px 26px;
+    padding: 20px 5px 26px;
   }
 
   .add-payments-topline,
@@ -478,7 +501,7 @@
 
 @media (max-width: 700px) {
   .add-payments-page {
-    padding: 16px 10px 22px;
+    padding: 16px 5px 22px;
   }
 
   .add-payments-card {
@@ -504,7 +527,7 @@
   }
 
   .add-payments-table {
-    min-width: 980px;
+    min-width: 1180px;
   }
 
   .add-payments-table th,

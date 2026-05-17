@@ -40,6 +40,7 @@ class PaymentRow(BaseModel):
     currency_code: str
     vat_amount_eur: Decimal | None = None
     own_expense_amount_eur: Decimal | None = None
+    own_expense_currency_code: str | None = None
     income_expense_eur: Decimal | None = None
     payment_direction: PaymentDirection
     payment_kind: PaymentKind
@@ -76,9 +77,12 @@ class PaymentDetailResponse(BaseModel):
     transaction_date: date | None = None
     amount_original: Decimal
     amount_eur: Decimal
+    currency_code: str
     vat_amount_eur: Decimal | None = None
     own_expense_amount_eur: Decimal | None = None
+    own_expense_currency_code: str | None = None
     company_commission_amount_eur: Decimal | None = None
+    company_commission_currency_code: str | None = None
     payment_direction: PaymentDirection
     payment_kind: PaymentKind
     status: PaymentStatus
@@ -99,9 +103,12 @@ class PaymentCreateRequest(BaseModel):
     transaction_date: date | None = None
     amount_original: Decimal = Field(gt=0)
     amount_eur: Decimal | None = Field(default=None, gt=0)
+    currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     vat_amount_eur: Decimal = Field(default=Decimal("0"), ge=0)
     own_expense_amount_eur: Decimal = Decimal("0")
+    own_expense_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     company_commission_amount_eur: Decimal = Decimal("0")
+    company_commission_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     payment_direction: PaymentDirection
     related_company_id: int | None = None
     related_company_name: str | None = Field(default=None, max_length=255)

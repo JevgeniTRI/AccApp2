@@ -35,6 +35,13 @@ import {
 import './AddPaymentsPage.css'
 
 const DRAFT_STORAGE_KEY = 'acc-app:add-payments-draft'
+const CURRENCY_OPTIONS = [
+  { value: 'RUB', label: 'Рубли' },
+  { value: 'USD', label: 'Доллары США' },
+  { value: 'EUR', label: 'Евро' },
+  { value: 'TRY', label: 'Турецкие лиры' },
+]
+
 const PARTY_TYPE_OPTIONS = [
   { value: 'counterparty', label: 'Контрагент' },
   { value: 'company', label: 'Компания' },
@@ -62,9 +69,12 @@ function createRow() {
     relatedCompanyText: '',
     counterpartyName: '',
     amount: '',
+    amountCurrency: 'EUR',
     tax: '',
     ownExpense: '',
+    ownExpenseCurrency: 'EUR',
     incomeExpense: '',
+    incomeExpenseCurrency: 'EUR',
     clientText: '',
     comment: '',
     expanded: false,
@@ -165,9 +175,12 @@ function createRowFromPayment(payment) {
     relatedCompanyText: payment.related_company?.name || '',
     counterpartyName: payment.counterparty?.name || '',
     amount: String(signedAmount),
+    amountCurrency: payment.currency_code || payment.company_bank_account?.currency_code || 'EUR',
     tax: payment.vat_amount_eur ? String(toNumber(payment.vat_amount_eur)) : '',
     ownExpense: payment.own_expense_amount_eur ? String(toNumber(payment.own_expense_amount_eur)) : '',
+    ownExpenseCurrency: payment.own_expense_currency_code || 'EUR',
     incomeExpense: payment.company_commission_amount_eur ? String(toNumber(payment.company_commission_amount_eur)) : '',
+    incomeExpenseCurrency: payment.company_commission_currency_code || 'EUR',
     clientText: payment.client?.name || '',
     comment: payment.notes || '',
     attachments: (payment.attachments || []).map(createExistingAttachment),
@@ -599,9 +612,12 @@ export default function AddPaymentsPage() {
           value_date: formState.bookingDate,
           transaction_date: formState.bookingDate,
           amount_original: Math.abs(amount),
+          currency_code: row.amountCurrency,
           vat_amount_eur: Math.abs(toNumber(row.tax)),
           own_expense_amount_eur: toNumber(row.ownExpense),
+          own_expense_currency_code: row.ownExpenseCurrency,
           company_commission_amount_eur: toNumber(row.incomeExpense),
+          company_commission_currency_code: row.incomeExpenseCurrency,
           client_id: client?.value ?? null,
           counterparty_name: counterpartyName,
           payment_purpose: paymentPurpose,
@@ -614,7 +630,7 @@ export default function AddPaymentsPage() {
           items.push({
             ...basePaymentItem,
             company_bank_account_id: bankAccount.value,
-            amount_eur: bankAccount.currencyCode === 'EUR' ? null : Math.abs(amount),
+            amount_eur: row.amountCurrency === 'EUR' ? null : Math.abs(amount),
             vat_amount_eur: 0,
             own_expense_amount_eur: 0,
             company_commission_amount_eur: 0,
@@ -624,7 +640,7 @@ export default function AddPaymentsPage() {
           items.push({
             ...basePaymentItem,
             company_bank_account_id: relatedCompany.bankAccountId,
-            amount_eur: relatedCompany.currencyCode === 'EUR' ? null : Math.abs(amount),
+            amount_eur: row.amountCurrency === 'EUR' ? null : Math.abs(amount),
             vat_amount_eur: 0,
             own_expense_amount_eur: 0,
             company_commission_amount_eur: 0,
@@ -640,7 +656,7 @@ export default function AddPaymentsPage() {
         items.push({
           ...basePaymentItem,
           company_bank_account_id: bankAccount.value,
-          amount_eur: bankAccount.currencyCode === 'EUR' ? null : Math.abs(amount),
+          amount_eur: row.amountCurrency === 'EUR' ? null : Math.abs(amount),
           payment_direction: amount >= 0 ? 'incoming' : 'outgoing',
           related_company_id: relatedCompany?.value ?? null,
           related_company_name: relatedCompany?.value ? null : relatedCompany?.label || null,
@@ -1019,14 +1035,28 @@ export default function AddPaymentsPage() {
                           )}
                         </td>
                         <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={row.amount}
-                            onChange={(event) => updateRow(row.id, { amount: event.target.value })}
-                            placeholder="0.00"
-                            className={amount > 0 ? 'is-positive' : ''}
-                          />
+                          <div className="add-payments-money-field">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={row.amount}
+                              onChange={(event) => updateRow(row.id, { amount: event.target.value })}
+                              placeholder="0.00"
+                              className={amount > 0 ? "is-positive" : ""}
+                            />
+                            <select
+                              className="add-payments-currency-select"
+                              value={row.amountCurrency}
+                              onChange={(event) => updateRow(row.id, { amountCurrency: event.target.value })}
+                              aria-label="Валюта суммы"
+                            >
+                              {CURRENCY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </td>
                         <td>
                           <input
@@ -1038,24 +1068,52 @@ export default function AddPaymentsPage() {
                           />
                         </td>
                         <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={row.ownExpense}
-                            onChange={(event) => updateRow(row.id, { ownExpense: event.target.value })}
-                            placeholder="-"
-                            className={toNumber(row.ownExpense) > 0 ? 'is-positive' : ''}
-                          />
+                          <div className="add-payments-money-field">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={row.ownExpense}
+                              onChange={(event) => updateRow(row.id, { ownExpense: event.target.value })}
+                              placeholder="-"
+                              className={toNumber(row.ownExpense) > 0 ? "is-positive" : ""}
+                            />
+                            <select
+                              className="add-payments-currency-select"
+                              value={row.ownExpenseCurrency}
+                              onChange={(event) => updateRow(row.id, { ownExpenseCurrency: event.target.value })}
+                              aria-label="Валюта своих расходов"
+                            >
+                              {CURRENCY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </td>
                         <td>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={row.incomeExpense}
-                            onChange={(event) => updateRow(row.id, { incomeExpense: event.target.value })}
-                            placeholder="-"
-                            className={toNumber(row.incomeExpense) > 0 ? 'is-positive' : ''}
-                          />
+                          <div className="add-payments-money-field">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={row.incomeExpense}
+                              onChange={(event) => updateRow(row.id, { incomeExpense: event.target.value })}
+                              placeholder="-"
+                              className={toNumber(row.incomeExpense) > 0 ? "is-positive" : ""}
+                            />
+                            <select
+                              className="add-payments-currency-select"
+                              value={row.incomeExpenseCurrency}
+                              onChange={(event) => updateRow(row.id, { incomeExpenseCurrency: event.target.value })}
+                              aria-label="Валюта доходов и расходов"
+                            >
+                              {CURRENCY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </td>
                         <td>
                           {row.partyType === 'clientCounterparty' ? (

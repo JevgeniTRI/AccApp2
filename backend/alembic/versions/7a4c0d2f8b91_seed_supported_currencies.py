@@ -48,6 +48,13 @@ SUPPORTED_CURRENCIES = [
         "minor_units": 2,
         "is_active": True,
     },
+    {
+        "code": "TRY",
+        "name": "Turkish Lira",
+        "numeric_code": "949",
+        "minor_units": 2,
+        "is_active": True,
+    },
 ]
 
 

@@ -253,12 +253,19 @@ async def get_payment_detail(db: AsyncSession, payment_id: int) -> PaymentDetail
         transaction_date=payment.transaction_date,
         amount_original=payment.amount_original,
         amount_eur=payment.amount_eur,
+        currency_code=payment.currency_code,
         vat_amount_eur=breakdown.vat_amount_eur if breakdown is not None else None,
         own_expense_amount_eur=(
             breakdown.own_expense_amount_eur if breakdown is not None else None
         ),
+        own_expense_currency_code=(
+            breakdown.own_expense_currency_code if breakdown is not None else None
+        ),
         company_commission_amount_eur=(
             breakdown.company_commission_amount_eur if breakdown is not None else None
+        ),
+        company_commission_currency_code=(
+            breakdown.company_commission_currency_code if breakdown is not None else None
         ),
         payment_direction=payment.payment_direction,
         payment_kind=payment.payment_kind,
@@ -437,7 +444,7 @@ async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateReques
     if bank is None:
         raise PaymentValidationError("Bank not found for bank account")
 
-    currency_code = (company_bank_account.currency_code or "").strip().upper()
+    currency_code = (payload.currency_code or company_bank_account.currency_code or "").strip().upper()
     if not currency_code:
         raise PaymentValidationError("Currency is not set for bank account")
 
@@ -526,7 +533,9 @@ async def upsert_payment_financial_breakdown(
 
     vat_amount_eur = payload.vat_amount_eur
     own_expense_amount_eur = payload.own_expense_amount_eur
+    own_expense_currency_code = (payload.own_expense_currency_code or "EUR").strip().upper()
     company_commission_amount_eur = payload.company_commission_amount_eur
+    company_commission_currency_code = (payload.company_commission_currency_code or "EUR").strip().upper()
     base_after_vat_eur = payment.amount_eur - vat_amount_eur
     gross_amount_original = payment.amount_original
     vat_amount_original = vat_amount_eur if currency_code == "EUR" else None
@@ -547,8 +556,10 @@ async def upsert_payment_financial_breakdown(
         "base_after_vat_eur": base_after_vat_eur,
         "company_commission_amount_original": company_commission_amount_original,
         "company_commission_amount_eur": company_commission_amount_eur,
+        "company_commission_currency_code": company_commission_currency_code,
         "own_expense_amount_original": own_expense_amount_original,
         "own_expense_amount_eur": own_expense_amount_eur,
+        "own_expense_currency_code": own_expense_currency_code,
         "client_commission_amount_original": None,
         "client_commission_amount_eur": Decimal("0"),
         "net_client_balance_effect_eur": base_after_vat_eur + company_commission_amount_eur,

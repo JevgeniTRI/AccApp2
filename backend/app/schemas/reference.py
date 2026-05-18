@@ -266,6 +266,11 @@ class ClientResponse(BaseModel):
     middle_name: str | None = None
 
 
+class ClientAccountBalanceItem(BaseModel):
+    currency_code: str
+    balance: Decimal
+
+
 class ClientOverviewItem(BaseModel):
     id: int
     full_name: str
@@ -277,6 +282,7 @@ class ClientOverviewItem(BaseModel):
     phone: str | None = None
     city: str | None = None
     status: str | None = None
+    account_balances: list[ClientAccountBalanceItem] = Field(default_factory=list)
 
 
 class ClientDetailResponse(BaseModel):

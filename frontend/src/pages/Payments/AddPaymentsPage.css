@@ -151,7 +151,7 @@
 
 .add-payments-table {
   width: 100%;
-  min-width: 1420px;
+  min-width: 1540px;
   border-collapse: collapse;
 }
 
@@ -200,6 +200,14 @@
 .add-payments-table__move {
   width: 36px;
   color: var(--muted-text);
+}
+
+.add-payments-table__date {
+  min-width: 150px;
+}
+
+.add-payments-table__date input {
+  color-scheme: light;
 }
 
 .add-payments-table__type {
@@ -291,6 +299,18 @@
 
 .add-payments-money-field input,
 .add-payments-money-field select {
+  min-width: 0;
+}
+
+.add-payments-client-field {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 82px;
+  gap: 8px;
+  align-items: center;
+}
+
+.add-payments-client-field input,
+.add-payments-client-field select {
   min-width: 0;
 }
 

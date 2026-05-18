@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.banking import Payment
 from app.models.enums import PaymentDirection
-from app.models.reference import Bank, Client, Company, CompanyBankAccount, CompanyContact, Counterparty, Currency
+from app.models.reference import Bank, Client, Company, CompanyBankAccount, CompanyClient, CompanyContact, Counterparty, Currency
 from app.schemas.reference import (
     BankAccountCreateRequest,
     BankAccountDetailResponse,
@@ -858,6 +858,37 @@ async def list_client_overview(
 
     result = await db.execute(stmt)
     clients = list(result.scalars().all())
+    client_ids = [client.id for client in clients]
+    balances_by_client: dict[int, list[dict[str, object]]] = {}
+
+    if client_ids:
+        balances_result = await db.execute(
+            select(
+                CompanyClient.client_id,
+                func.coalesce(CompanyBankAccount.currency_code, "EUR").label("currency_code"),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (Payment.payment_direction == PaymentDirection.INCOMING, Payment.amount_original),
+                            else_=-Payment.amount_original,
+                        )
+                    ),
+                    0,
+                ).label("balance"),
+            )
+            .join(CompanyBankAccount, CompanyBankAccount.company_id == CompanyClient.company_id)
+            .outerjoin(Payment, Payment.company_bank_account_id == CompanyBankAccount.id)
+            .where(CompanyClient.client_id.in_(client_ids))
+            .group_by(CompanyClient.client_id, CompanyBankAccount.currency_code)
+        )
+
+        for row in balances_result:
+            balances_by_client.setdefault(row.client_id, []).append(
+                {
+                    "currency_code": row.currency_code or "EUR",
+                    "balance": row.balance,
+                }
+            )
 
     return [
         ClientOverviewItem(
@@ -871,6 +902,7 @@ async def list_client_overview(
             phone=client.phone,
             city=client.city,
             status=client.status,
+            account_balances=balances_by_client.get(client.id, []),
         )
         for client in clients
     ]

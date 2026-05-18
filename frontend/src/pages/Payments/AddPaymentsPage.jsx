@@ -4,6 +4,7 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
+  Copy,
   Eye,
   GripVertical,
   Paperclip,
@@ -45,7 +46,7 @@ const CURRENCY_OPTIONS = [
 const PARTY_TYPE_OPTIONS = [
   { value: 'counterparty', label: 'Контрагент' },
   { value: 'company', label: 'Компания' },
-  { value: 'clientCounterparty', label: 'Клиент + контрагент' },
+  { value: 'clientCounterparty', label: 'Контрагент + клиент' },
 ]
 
 function inferPartyType(row) {
@@ -61,10 +62,11 @@ function inferPartyType(row) {
   return 'counterparty'
 }
 
-function createRow() {
+function createRow(bookingDate = '') {
   return {
     id: crypto.randomUUID(),
-    partyType: 'counterparty',
+    bookingDate,
+    partyType: 'clientCounterparty',
     relatedCompany: null,
     relatedCompanyText: '',
     counterpartyName: '',
@@ -76,6 +78,7 @@ function createRow() {
     incomeExpense: '',
     incomeExpenseCurrency: 'EUR',
     clientText: '',
+    clientCurrency: 'EUR',
     comment: '',
     expanded: false,
     attachments: [],
@@ -92,11 +95,13 @@ function hydrateRow(row) {
 }
 
 function createInitialState() {
+  const bookingDate = toDateInputValue(new Date())
+
   return {
-    bookingDate: toDateInputValue(new Date()),
+    bookingDate,
     bankAccount: null,
     bankAccountText: '',
-    rows: [createRow(), createRow()],
+    rows: [createRow(bookingDate), createRow(bookingDate)],
   }
 }
 
@@ -181,7 +186,9 @@ function createRowFromPayment(payment) {
     ownExpenseCurrency: payment.own_expense_currency_code || 'EUR',
     incomeExpense: payment.company_commission_amount_eur ? String(toNumber(payment.company_commission_amount_eur)) : '',
     incomeExpenseCurrency: payment.company_commission_currency_code || 'EUR',
+    bookingDate: payment.booking_date || toDateInputValue(new Date()),
     clientText: payment.client?.name || '',
+    clientCurrency: payment.currency_code || payment.company_bank_account?.currency_code || 'EUR',
     comment: payment.notes || '',
     attachments: (payment.attachments || []).map(createExistingAttachment),
   }
@@ -385,7 +392,13 @@ export default function AddPaymentsPage() {
   const balanceCurrency = balanceState.currencyCode || formState.bankAccount?.currencyCode || 'EUR'
 
   function updateFormField(name, value) {
-    setFormState((current) => ({ ...current, [name]: value }))
+    setFormState((current) => ({
+      ...current,
+      [name]: value,
+      rows: name === 'bookingDate'
+        ? current.rows.map((row) => ({ ...row, bookingDate: value }))
+        : current.rows,
+    }))
   }
 
   function updateRow(rowId, patch) {
@@ -395,20 +408,68 @@ export default function AddPaymentsPage() {
     }))
   }
 
+  function updateRowBookingDate(rowId, value) {
+    setFormState((current) => {
+      const rowIndex = current.rows.findIndex((row) => row.id === rowId)
+      if (rowIndex === -1) {
+        return current
+      }
+
+      const previousDate = current.rows[rowIndex].bookingDate
+      return {
+        ...current,
+        bookingDate: rowIndex === 0 ? value : current.bookingDate,
+        rows: current.rows.map((row, index) => {
+          if (index === rowIndex) {
+            return { ...row, bookingDate: value }
+          }
+          if (index > rowIndex && (!row.bookingDate || row.bookingDate === previousDate)) {
+            return { ...row, bookingDate: value }
+          }
+          return row
+        }),
+      }
+    })
+  }
+
   function addRow(afterRowId = null) {
     setFormState((current) => {
-      const nextRow = createRow()
       if (!afterRowId) {
-        return { ...current, rows: [...current.rows, nextRow] }
+        const previousDate = current.rows.at(-1)?.bookingDate || current.bookingDate
+        return { ...current, rows: [...current.rows, createRow(previousDate)] }
       }
 
       const index = current.rows.findIndex((row) => row.id === afterRowId)
       if (index === -1) {
-        return { ...current, rows: [...current.rows, nextRow] }
+        const previousDate = current.rows.at(-1)?.bookingDate || current.bookingDate
+        return { ...current, rows: [...current.rows, createRow(previousDate)] }
       }
 
       const nextRows = [...current.rows]
-      nextRows.splice(index + 1, 0, nextRow)
+      nextRows.splice(index + 1, 0, createRow(current.rows[index].bookingDate || current.bookingDate))
+      return { ...current, rows: nextRows }
+    })
+  }
+
+  function copyRow(rowId) {
+    setFormState((current) => {
+      const index = current.rows.findIndex((row) => row.id === rowId)
+      if (index === -1) {
+        return current
+      }
+
+      const sourceRow = current.rows[index]
+      const copiedRow = {
+        ...sourceRow,
+        id: crypto.randomUUID(),
+        relatedCompany: sourceRow.relatedCompany ? { ...sourceRow.relatedCompany } : null,
+        attachments: sourceRow.attachments.map((attachment) => ({
+          ...attachment,
+          id: crypto.randomUUID(),
+        })),
+      }
+      const nextRows = [...current.rows]
+      nextRows.splice(index + 1, 0, copiedRow)
       return { ...current, rows: nextRows }
     })
   }
@@ -416,7 +477,7 @@ export default function AddPaymentsPage() {
   function removeRow(rowId) {
     setFormState((current) => {
       if (current.rows.length === 1) {
-        return { ...current, rows: [createRow()] }
+        return { ...current, rows: [createRow(current.bookingDate)] }
       }
 
       return {
@@ -448,7 +509,7 @@ export default function AddPaymentsPage() {
   function handleClearRows() {
     setFormState((current) => ({
       ...current,
-      rows: [createRow()],
+      rows: [createRow(current.bookingDate)],
     }))
     setMessage({ type: '', text: '' })
   }
@@ -590,7 +651,7 @@ export default function AddPaymentsPage() {
 
         if (row.partyType === 'clientCounterparty') {
           if (!client) {
-            throw new Error('Для типа "Клиент + контрагент" нужно выбрать клиента')
+            throw new Error('Для типа "Контрагент + клиент" нужно выбрать клиента')
           }
         }
 
@@ -607,12 +668,13 @@ export default function AddPaymentsPage() {
         const keepAttachmentIds = row.attachments
           .filter((attachment) => Number.isInteger(attachment.existingAttachmentId))
           .map((attachment) => attachment.existingAttachmentId)
+        const rowCurrency = row.partyType === 'clientCounterparty' ? row.clientCurrency : row.amountCurrency
         const basePaymentItem = {
-          booking_date: formState.bookingDate,
-          value_date: formState.bookingDate,
-          transaction_date: formState.bookingDate,
+          booking_date: row.bookingDate || formState.bookingDate,
+          value_date: row.bookingDate || formState.bookingDate,
+          transaction_date: row.bookingDate || formState.bookingDate,
           amount_original: Math.abs(amount),
-          currency_code: row.amountCurrency,
+          currency_code: rowCurrency,
           vat_amount_eur: Math.abs(toNumber(row.tax)),
           own_expense_amount_eur: toNumber(row.ownExpense),
           own_expense_currency_code: row.ownExpenseCurrency,
@@ -630,7 +692,7 @@ export default function AddPaymentsPage() {
           items.push({
             ...basePaymentItem,
             company_bank_account_id: bankAccount.value,
-            amount_eur: row.amountCurrency === 'EUR' ? null : Math.abs(amount),
+            amount_eur: rowCurrency === 'EUR' ? null : Math.abs(amount),
             vat_amount_eur: 0,
             own_expense_amount_eur: 0,
             company_commission_amount_eur: 0,
@@ -640,7 +702,7 @@ export default function AddPaymentsPage() {
           items.push({
             ...basePaymentItem,
             company_bank_account_id: relatedCompany.bankAccountId,
-            amount_eur: row.amountCurrency === 'EUR' ? null : Math.abs(amount),
+            amount_eur: rowCurrency === 'EUR' ? null : Math.abs(amount),
             vat_amount_eur: 0,
             own_expense_amount_eur: 0,
             company_commission_amount_eur: 0,
@@ -656,7 +718,7 @@ export default function AddPaymentsPage() {
         items.push({
           ...basePaymentItem,
           company_bank_account_id: bankAccount.value,
-          amount_eur: row.amountCurrency === 'EUR' ? null : Math.abs(amount),
+          amount_eur: rowCurrency === 'EUR' ? null : Math.abs(amount),
           payment_direction: amount >= 0 ? 'incoming' : 'outgoing',
           related_company_id: relatedCompany?.value ?? null,
           related_company_name: relatedCompany?.value ? null : relatedCompany?.label || null,
@@ -933,6 +995,7 @@ export default function AddPaymentsPage() {
               <thead>
                 <tr>
                   <th />
+                  <th>Дата</th>
                   <th>Тип стороны</th>
                   <th>Компания</th>
                   <th>Контрагент</th>
@@ -957,6 +1020,14 @@ export default function AddPaymentsPage() {
                       <tr>
                         <td className="add-payments-table__move">
                           <GripVertical size={14} />
+                        </td>
+                        <td className="add-payments-table__date">
+                          <input
+                            type="date"
+                            value={row.bookingDate || formState.bookingDate}
+                            onChange={(event) => updateRowBookingDate(row.id, event.target.value)}
+                            aria-label="Дата платежа"
+                          />
                         </td>
                         <td className="add-payments-table__type">
                           <select
@@ -1117,13 +1188,30 @@ export default function AddPaymentsPage() {
                         </td>
                         <td>
                           {row.partyType === 'clientCounterparty' ? (
-                            <input
-                              list="clients-options"
-                              type="text"
-                              value={row.clientText}
-                              onChange={(event) => updateRow(row.id, { clientText: event.target.value })}
-                              placeholder="Клиент из справочника"
-                            />
+                            <div className="add-payments-client-field">
+                              <input
+                                list="clients-options"
+                                type="text"
+                                value={row.clientText}
+                                onChange={(event) => updateRow(row.id, { clientText: event.target.value })}
+                                placeholder="Клиент из справочника"
+                              />
+                              <select
+                                className="add-payments-currency-select"
+                                value={row.clientCurrency}
+                                onChange={(event) => updateRow(row.id, {
+                                  clientCurrency: event.target.value,
+                                  amountCurrency: event.target.value,
+                                })}
+                                aria-label="Валюта платежа к клиенту"
+                              >
+                                {CURRENCY_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                           ) : (
                             <div className="add-payments-table__party-placeholder">
                               <span>-</span>
@@ -1177,6 +1265,9 @@ export default function AddPaymentsPage() {
                                 onChange={(event) => handleAttachmentPick(row.id, event)}
                               />
                             </label>
+                            <button type="button" onClick={() => copyRow(row.id)} aria-label="Скопировать строку">
+                              <Copy size={14} />
+                            </button>
                             <button type="button" onClick={() => removeRow(row.id)} aria-label="Удалить строку">
                               <Trash2 size={14} />
                             </button>
@@ -1186,7 +1277,7 @@ export default function AddPaymentsPage() {
                       {row.expanded ? (
                         <tr className="add-payments-breakdown-row">
                           <td />
-                          <td colSpan={10}>
+                          <td colSpan={11}>
                             <div className="add-payments-breakdown">
                               <div>
                                 <span>Сумма без налога:</span>

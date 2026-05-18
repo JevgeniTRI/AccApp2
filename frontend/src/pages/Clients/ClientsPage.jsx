@@ -32,22 +32,34 @@ function EmptyState({ search }) {
   )
 }
 
-function formatDate(value) {
-  if (!value) {
-    return '-'
-  }
+function formatClientBalanceItem(item) {
+  const amount = Number(item?.balance || 0)
+  const currencyCode = item?.currency_code || 'EUR'
 
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
+  try {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: currencyCode,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number.isFinite(amount) ? amount : 0)
+  } catch {
+    return `${new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number.isFinite(amount) ? amount : 0)} ${currencyCode}`
   }
-
-  return new Intl.DateTimeFormat('ru-RU').format(date)
 }
 
-function buildContactLabel(client) {
-  const parts = [client.email, client.phone].filter(Boolean)
-  return parts.length > 0 ? parts.join(' / ') : '-'
+function formatClientBalances(accountBalances) {
+  const balances = (accountBalances || []).filter((item) => Number(item.balance || 0) !== 0)
+  const visibleBalances = balances.length > 0 ? balances : accountBalances || []
+
+  if (visibleBalances.length === 0) {
+    return formatClientBalanceItem({ balance: 0, currency_code: 'EUR' })
+  }
+
+  return visibleBalances.map(formatClientBalanceItem).join(' / ')
 }
 
 export default function ClientsPage() {
@@ -111,11 +123,7 @@ export default function ClientsPage() {
   async function handleCopyClient(client) {
     const text = [
       `ФИО: ${client.full_name}`,
-      `Личный код: ${client.personal_id_number || '-'}`,
-      `Дата рождения: ${formatDate(client.date_of_birth)}`,
-      `Страна / налоговое резидентство: ${client.country_code || '-'} / ${client.tax_residency_country_code || '-'}`,
-      `Контакты: ${buildContactLabel(client)}`,
-      `Город: ${client.city || '-'}`,
+      `Баланс: ${formatClientBalances(client.account_balances)}`,
       `Статус: ${client.status || '-'}`,
     ].join('\n')
 
@@ -210,11 +218,7 @@ export default function ClientsPage() {
                   <tr>
                     <th />
                     <th>ФИО</th>
-                    <th>Личный код</th>
-                    <th>Дата рождения</th>
-                    <th>Страна / налог</th>
-                    <th>Контакты</th>
-                    <th>Город</th>
+                    <th>Баланс</th>
                     <th>Статус</th>
                     <th />
                   </tr>
@@ -226,13 +230,7 @@ export default function ClientsPage() {
                         <input type="checkbox" />
                       </td>
                       <td className="clients-table__name">{client.full_name}</td>
-                      <td>{client.personal_id_number || '-'}</td>
-                      <td>{formatDate(client.date_of_birth)}</td>
-                      <td>
-                        {[client.country_code || '-', client.tax_residency_country_code || '-'].join(' / ')}
-                      </td>
-                      <td>{buildContactLabel(client)}</td>
-                      <td>{client.city || '-'}</td>
+                      <td className="clients-table__balance">{formatClientBalances(client.account_balances)}</td>
                       <td>
                         <span className={`clients-status-chip ${client.status ? 'is-filled' : ''}`}>
                           {client.status || '-'}

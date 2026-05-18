@@ -1,6 +1,6 @@
 .clients-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 720px;
   border-collapse: collapse;
 }
 
@@ -35,6 +35,12 @@
 .clients-table__name {
   color: #2964ff;
   font-weight: 600;
+}
+
+.clients-table__balance {
+  color: var(--text-main);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .clients-status-chip {
@@ -109,30 +115,14 @@
   }
 
   .clients-table td:nth-child(3)::before {
-    content: 'ID';
+    content: 'Баланс';
   }
 
   .clients-table td:nth-child(4)::before {
-    content: 'Рождение';
-  }
-
-  .clients-table td:nth-child(5)::before {
-    content: 'Страна';
-  }
-
-  .clients-table td:nth-child(6)::before {
-    content: 'Контакты';
-  }
-
-  .clients-table td:nth-child(7)::before {
-    content: 'Город';
-  }
-
-  .clients-table td:nth-child(8)::before {
     content: 'Статус';
   }
 
-  .clients-table td:nth-child(9)::before {
+  .clients-table td:nth-child(5)::before {
     content: 'Действия';
   }
 }

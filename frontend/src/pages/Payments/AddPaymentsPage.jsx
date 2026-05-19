@@ -170,6 +170,7 @@ function createRowFromPayment(payment) {
           label: payment.related_company.name || '',
           companyId: payment.related_company.id,
           companyName: payment.related_company.name || '',
+          bankAccountId: payment.related_company.bank_account_id,
         }
       : null,
     relatedCompanyText: payment.related_company?.name || '',
@@ -683,7 +684,9 @@ export default function AddPaymentsPage() {
           attachments,
         }
 
-        if (isAccountTransferRow({ ...row, relatedCompany }, bankAccount)) {
+        const isTransferRow = isAccountTransferRow({ ...row, relatedCompany }, bankAccount)
+
+        if (isTransferRow && !isEditMode) {
           items.push({
             ...basePaymentItem,
             company_bank_account_id: bankAccount.value,
@@ -693,6 +696,7 @@ export default function AddPaymentsPage() {
             company_commission_amount_eur: 0,
             payment_direction: 'outgoing',
             related_company_id: relatedCompany.value,
+            related_company_bank_account_id: relatedCompany.bankAccountId,
           })
           items.push({
             ...basePaymentItem,
@@ -703,6 +707,7 @@ export default function AddPaymentsPage() {
             company_commission_amount_eur: 0,
             payment_direction: 'incoming',
             related_company_id: bankAccount.companyId ?? null,
+            related_company_bank_account_id: bankAccount.value,
             payment_purpose: bankAccount.label || bankAccount.companyName || paymentPurpose,
             keep_attachment_ids: [],
             attachments: [],
@@ -716,6 +721,7 @@ export default function AddPaymentsPage() {
           amount_eur: rowCurrency === 'EUR' ? null : Math.abs(amount),
           payment_direction: amount >= 0 ? 'incoming' : 'outgoing',
           related_company_id: relatedCompany?.value ?? null,
+          related_company_bank_account_id: isTransferRow ? relatedCompany.bankAccountId : null,
           related_company_name: relatedCompany?.value ? null : relatedCompany?.label || null,
         })
       }

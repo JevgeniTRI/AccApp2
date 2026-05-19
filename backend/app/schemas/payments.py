@@ -10,6 +10,7 @@ from app.schemas.reference import BankAccountLookupItem
 class PaymentPartySummary(BaseModel):
     id: int | None = None
     name: str | None = None
+    bank_account_id: int | None = None
 
 
 class PaymentBankSummary(BaseModel):
@@ -112,6 +113,7 @@ class PaymentCreateRequest(BaseModel):
     company_commission_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     payment_direction: PaymentDirection
     related_company_id: int | None = None
+    related_company_bank_account_id: int | None = None
     related_company_name: str | None = Field(default=None, max_length=255)
     client_id: int | None = None
     counterparty_id: int | None = None

@@ -229,6 +229,7 @@ async def get_payment_detail(db: AsyncSession, payment_id: int) -> PaymentDetail
         .order_by(PaymentAttachment.id.asc())
     )
     attachments = list(attachments_result.scalars().all())
+    transfer_counterpart = await find_transfer_counterpart(db, payment)
 
     account_reference = (
         company_bank_account.iban or company_bank_account.account_number or f"Account #{company_bank_account.id}"
@@ -275,6 +276,11 @@ async def get_payment_detail(db: AsyncSession, payment_id: int) -> PaymentDetail
         related_company=PaymentPartySummary(
             id=related_company.id if related_company is not None else None,
             name=format_company_display_name(related_company) if related_company is not None else None,
+            bank_account_id=(
+                transfer_counterpart.company_bank_account_id
+                if transfer_counterpart is not None
+                else None
+            ),
         ),
         counterparty=PaymentPartySummary(
             id=counterparty.id if counterparty is not None else None,
@@ -309,6 +315,7 @@ async def update_payment(db: AsyncSession, payment_id: int, payload: PaymentCrea
     if payment is None:
         raise PaymentValidationError("Payment not found")
 
+    old_transfer_counterpart = await find_transfer_counterpart(db, payment)
     resolved = await resolve_payment_payload(db, payload)
 
     validate_financial_breakdown(payload, resolved["amount_eur"])
@@ -337,6 +344,13 @@ async def update_payment(db: AsyncSession, payment_id: int, payload: PaymentCrea
     await db.flush()
     await upsert_payment_financial_breakdown(db, payment=payment, payload=payload, currency_code=resolved["currency_code"])
     await replace_payment_attachments(db, payment=payment, payload=payload)
+    await sync_transfer_counterpart(
+        db,
+        payment=payment,
+        payload=payload,
+        resolved=resolved,
+        old_transfer_counterpart=old_transfer_counterpart,
+    )
     return payment
 
 
@@ -429,6 +443,134 @@ async def get_bank_account_balance(db: AsyncSession, company_bank_account_id: in
     }
 
 
+
+def _opposite_payment_direction(direction: PaymentDirection) -> PaymentDirection:
+    return PaymentDirection.INCOMING if direction == PaymentDirection.OUTGOING else PaymentDirection.OUTGOING
+
+
+def _nullable_payment_field_equals(column, value):
+    return column.is_(None) if value is None else column == value
+
+
+async def find_transfer_counterpart(db: AsyncSession, payment: Payment) -> Payment | None:
+    if payment.related_company_id is None or payment.client_id is not None or payment.counterparty_id is not None:
+        return None
+
+    result = await db.execute(
+        select(Payment)
+        .where(
+            Payment.id != payment.id,
+            Payment.company_id == payment.related_company_id,
+            Payment.related_company_id == payment.company_id,
+            Payment.client_id.is_(None),
+            Payment.counterparty_id.is_(None),
+            Payment.payment_kind == PaymentKind.EXPENSE,
+            Payment.payment_direction == _opposite_payment_direction(payment.payment_direction),
+            Payment.amount_original == payment.amount_original,
+            Payment.currency_code == payment.currency_code,
+            _nullable_payment_field_equals(Payment.booking_date, payment.booking_date),
+            _nullable_payment_field_equals(Payment.value_date, payment.value_date),
+            _nullable_payment_field_equals(Payment.transaction_date, payment.transaction_date),
+        )
+        .order_by(func.abs(Payment.id - payment.id).asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def sync_transfer_counterpart(
+    db: AsyncSession,
+    *,
+    payment: Payment,
+    payload: PaymentCreateRequest,
+    resolved: dict,
+    old_transfer_counterpart: Payment | None,
+) -> None:
+    target_account = resolved.get("related_company_bank_account")
+    should_have_counterpart = (
+        target_account is not None
+        and resolved.get("related_company") is not None
+        and resolved.get("client") is None
+        and resolved.get("counterparty") is None
+        and not (payload.counterparty_name or "").strip()
+    )
+
+    if not should_have_counterpart:
+        if old_transfer_counterpart is not None:
+            await delete_payment(db, old_transfer_counterpart.id)
+        return
+
+    counterpart = old_transfer_counterpart
+    if counterpart is None:
+        counterpart = Payment(status=PaymentStatus.PENDING_REVIEW, is_manual=True)
+        db.add(counterpart)
+
+    counterpart.company_id = target_account.company_id
+    counterpart.company_bank_account_id = target_account.id
+    counterpart.related_company_id = resolved["company"].id
+    counterpart.client_id = None
+    counterpart.counterparty_id = None
+    counterpart.counterparty_name = None
+    counterpart.payment_kind = PaymentKind.EXPENSE
+    counterpart.payment_direction = _opposite_payment_direction(payload.payment_direction)
+    counterpart.booking_date = payload.booking_date
+    counterpart.value_date = payload.value_date
+    counterpart.transaction_date = payload.transaction_date
+    counterpart.amount_original = payload.amount_original
+    counterpart.currency_code = resolved["currency_code"]
+    counterpart.exchange_rate_id = payload.exchange_rate_id
+    counterpart.exchange_rate_manual = payload.exchange_rate_manual
+    counterpart.amount_eur = resolved["amount_eur"]
+    counterpart.payment_reference = payload.payment_reference
+    counterpart.payment_purpose = format_company_display_name(resolved["company"])
+    counterpart.notes = payload.notes
+    counterpart.status = PaymentStatus.PENDING_REVIEW
+    counterpart.is_manual = True
+
+    await db.flush()
+    await upsert_transfer_counterpart_breakdown(db, counterpart)
+    await delete_payment_attachments(db, counterpart.id)
+
+
+async def upsert_transfer_counterpart_breakdown(db: AsyncSession, payment: Payment) -> None:
+    existing_result = await db.execute(
+        select(PaymentFinancialBreakdown).where(PaymentFinancialBreakdown.payment_id == payment.id)
+    )
+    breakdown = existing_result.scalar_one_or_none()
+    values = {
+        "gross_amount_original": payment.amount_original,
+        "gross_amount_eur": payment.amount_eur,
+        "vat_amount_original": Decimal("0") if payment.currency_code == "EUR" else None,
+        "vat_amount_eur": Decimal("0"),
+        "base_after_vat_original": payment.amount_original if payment.currency_code == "EUR" else None,
+        "base_after_vat_eur": payment.amount_eur,
+        "company_commission_amount_original": Decimal("0") if payment.currency_code == "EUR" else None,
+        "company_commission_amount_eur": Decimal("0"),
+        "company_commission_currency_code": "EUR",
+        "own_expense_amount_original": Decimal("0") if payment.currency_code == "EUR" else None,
+        "own_expense_amount_eur": Decimal("0"),
+        "own_expense_currency_code": "EUR",
+        "client_commission_amount_original": None,
+        "client_commission_amount_eur": Decimal("0"),
+        "net_client_balance_effect_eur": payment.amount_eur,
+    }
+
+    if breakdown is None:
+        db.add(PaymentFinancialBreakdown(payment_id=payment.id, **values))
+        await db.flush()
+        return
+
+    for field_name, field_value in values.items():
+        setattr(breakdown, field_name, field_value)
+
+
+async def delete_payment_attachments(db: AsyncSession, payment_id: int) -> None:
+    attachments_result = await db.execute(select(PaymentAttachment).where(PaymentAttachment.payment_id == payment_id))
+    for attachment in attachments_result.scalars().all():
+        await db.delete(attachment)
+    await db.flush()
+
+
 async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateRequest) -> dict:
     company_bank_account = await db.get(CompanyBankAccount, payload.company_bank_account_id)
     if company_bank_account is None:
@@ -459,6 +601,18 @@ async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateReques
         related_company = await get_or_create_company(db, payload.related_company_name)
     if related_company is not None and related_company.id == company.id:
         raise PaymentValidationError("Related company must differ from the bank account company")
+
+    related_company_bank_account = None
+    if payload.related_company_bank_account_id is not None:
+        related_company_bank_account = await db.get(CompanyBankAccount, payload.related_company_bank_account_id)
+        if related_company_bank_account is None:
+            raise PaymentValidationError("Related company bank account not found")
+        if not related_company_bank_account.is_active:
+            raise PaymentValidationError("Related company bank account is inactive")
+        if related_company is None or related_company_bank_account.company_id != related_company.id:
+            raise PaymentValidationError("Related company bank account does not belong to related company")
+        if related_company_bank_account.id == company_bank_account.id:
+            raise PaymentValidationError("Related company bank account must differ from source bank account")
 
     client = None
     counterparty = None
@@ -508,6 +662,7 @@ async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateReques
         "bank": bank,
         "currency_code": currency_code,
         "related_company": related_company,
+        "related_company_bank_account": related_company_bank_account,
         "client": client,
         "counterparty": counterparty,
         "counterparty_name": counterparty_name,

@@ -76,9 +76,17 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
               <td className={`payments-table__amount ${amountClass}`}>
                 {formatAmount(payment.signed_amount, payment.currency_code)}
               </td>
-              <td>{payment.own_expense_amount_eur ? formatAmount(payment.own_expense_amount_eur) : '-'}</td>
+              <td>
+                {payment.own_expense_amount_eur
+                  ? formatAmount(payment.own_expense_amount_eur, payment.own_expense_currency_code || 'EUR')
+                  : '-'}
+              </td>
               <td>{payment.vat_amount_eur ? formatAmount(payment.vat_amount_eur) : '-'}</td>
-              <td>{payment.income_expense_eur ? formatAmount(payment.income_expense_eur) : '-'}</td>
+              <td>
+                {payment.income_expense_eur
+                  ? formatAmount(payment.income_expense_eur, payment.company_commission_currency_code || 'EUR')
+                  : '-'}
+              </td>
               <td>{payment.client?.name || '-'}</td>
               <td>
                 <div className="payments-table__comment">

@@ -77,7 +77,9 @@ async def list_payments(
             Client.full_name.label("client_name"),
             PaymentFinancialBreakdown.vat_amount_eur,
             PaymentFinancialBreakdown.own_expense_amount_eur,
+            PaymentFinancialBreakdown.own_expense_currency_code,
             PaymentFinancialBreakdown.company_commission_amount_eur,
+            PaymentFinancialBreakdown.company_commission_currency_code,
         )
         .join(Company, Company.id == Payment.company_id)
         .join(CompanyBankAccount, CompanyBankAccount.id == Payment.company_bank_account_id)

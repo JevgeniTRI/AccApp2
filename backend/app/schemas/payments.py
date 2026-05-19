@@ -42,6 +42,7 @@ class PaymentRow(BaseModel):
     own_expense_amount_eur: Decimal | None = None
     own_expense_currency_code: str | None = None
     income_expense_eur: Decimal | None = None
+    company_commission_currency_code: str | None = None
     payment_direction: PaymentDirection
     payment_kind: PaymentKind
     status: PaymentStatus

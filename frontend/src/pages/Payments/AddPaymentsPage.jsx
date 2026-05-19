@@ -25,6 +25,7 @@ import {
   updatePayment,
 } from '../../lib/api'
 import {
+  CURRENCY_OPTIONS,
   findLookupOption,
   formatAmount,
   loadCompanyPaymentOptions,
@@ -36,12 +37,6 @@ import {
 import './AddPaymentsPage.css'
 
 const DRAFT_STORAGE_KEY = 'acc-app:add-payments-draft'
-const CURRENCY_OPTIONS = [
-  { value: 'RUB', label: 'Рубли' },
-  { value: 'USD', label: 'Доллары США' },
-  { value: 'EUR', label: 'Евро' },
-  { value: 'TRY', label: 'Турецкие лиры' },
-]
 
 const PARTY_TYPE_OPTIONS = [
   { value: 'counterparty', label: 'Контрагент' },
@@ -1118,7 +1113,13 @@ export default function AddPaymentsPage() {
                             <select
                               className="add-payments-currency-select"
                               value={row.amountCurrency}
-                              onChange={(event) => updateRow(row.id, { amountCurrency: event.target.value })}
+                              onChange={(event) => {
+                                const currency = event.target.value
+                                updateRow(row.id, {
+                                  amountCurrency: currency,
+                                  ...(row.partyType === 'clientCounterparty' ? { clientCurrency: currency } : {}),
+                                })
+                              }}
                               aria-label="Валюта суммы"
                             >
                               {CURRENCY_OPTIONS.map((option) => (

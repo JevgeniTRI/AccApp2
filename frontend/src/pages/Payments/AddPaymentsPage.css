@@ -151,7 +151,7 @@
 
 .add-payments-table {
   width: 100%;
-  min-width: 1540px;
+  min-width: 1660px;
   border-collapse: collapse;
 }
 
@@ -547,7 +547,7 @@
   }
 
   .add-payments-table {
-    min-width: 1180px;
+    min-width: 1260px;
   }
 
   .add-payments-table th,

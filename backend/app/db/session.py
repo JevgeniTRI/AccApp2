@@ -5,12 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.settings import settings
 
 
-engine_kwargs = {"echo": False, "future": True}
-
-if settings.database_url.startswith("sqlite"):
-    engine_kwargs["connect_args"] = {"check_same_thread": False}
-
-async_engine = create_async_engine(settings.async_database_url, **engine_kwargs)
+async_engine = create_async_engine(settings.async_database_url, echo=False, future=True)
 SessionLocal = async_sessionmaker(bind=async_engine, autoflush=False, expire_on_commit=False)
 
 

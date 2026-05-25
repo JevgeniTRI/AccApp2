@@ -1,10 +1,11 @@
 # Accounting App
 
-Backend-first foundation for an accounting system built with `FastAPI`, `SQLAlchemy`, and `SQLite`, with a planned path to `MySQL`.
+Backend-first foundation for an accounting system built with `FastAPI`, `SQLAlchemy`, and MariaDB/MySQL.
 
 ## Requirements
 
 - `Python 3.11+`
+- MariaDB/MySQL database
 - `Node.js` with `npm`
 - `PowerShell` if you want to run the commands exactly as shown below
 
@@ -21,22 +22,22 @@ The project is split into:
 Open the first terminal in the repository root and run:
 
 ```powershell
-cd .\backend
+cd ./backend
 python -m venv .\.venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
-### 2. Database setup (`SQLite` by default)
+### 2. Database setup (`MariaDB/MySQL`)
 
-The backend reads settings from `backend/.env`. By default it uses:
+The backend reads settings from `backend/.env`. `DATABASE_URL` is required and must point to MariaDB/MySQL:
 
 ```env
-DATABASE_URL=sqlite:///./accounting.db
+DATABASE_URL=mysql+aiomysql://user:password@host:3306/database_name
 ```
 
-That path resolves to `backend/accounting.db`.
+A plain `mysql://...` URL is also accepted by the app and converted to the async `mysql+aiomysql://...` dialect internally. Other database dialects are not supported.
 
 Create or update the schema before starting the API:
 
@@ -46,9 +47,9 @@ alembic upgrade head
 
 Notes:
 
-- `backend/.env` is already present with defaults for local development.
-- `backend/accounting.db` is a local development database. If you want an isolated local database, point `DATABASE_URL` to another SQLite file, for example `sqlite:///./accounting.local.db`, and then run `alembic upgrade head`.
-- If you already have an existing local database that was created before Alembic revisions were added, use `alembic stamp head` once to mark the existing schema as current. Use `alembic upgrade head` for new databases and future schema changes.
+- `backend/.env` is not committed and should contain the real MariaDB credentials for the environment.
+- Use `alembic upgrade head` for new databases and future schema changes.
+- If you already have an existing MariaDB schema that predates Alembic revisions, use `alembic stamp head` once to mark the existing schema as current.
 
 ### 3. Start the backend
 
@@ -69,7 +70,7 @@ Useful URLs:
 Open a second terminal in the repository root and run:
 
 ```powershell
-cd .\frontend
+cd ./frontend
 npm install
 npm run dev
 ```
@@ -96,4 +97,4 @@ VITE_API_BASE_URL=http://127.0.0.1:8000
 - Company, client, counterparty, and banking reference models
 - Normalized payments and settlement snapshots
 - Client balance ledger and double-entry accounting layer
-- SQLite-friendly schema that stays portable to `MySQL`
+- MariaDB/MySQL-backed accounting workflows

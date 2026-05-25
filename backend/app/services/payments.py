@@ -6,7 +6,7 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -80,6 +80,8 @@ async def list_payments(
             PaymentFinancialBreakdown.own_expense_currency_code,
             PaymentFinancialBreakdown.company_commission_amount_eur,
             PaymentFinancialBreakdown.company_commission_currency_code,
+            PaymentFinancialBreakdown.net_client_balance_effect_eur,
+            PaymentFinancialBreakdown.client_balance_effect_currency_code,
         )
         .join(Company, Company.id == Payment.company_id)
         .join(CompanyBankAccount, CompanyBankAccount.id == Payment.company_bank_account_id)
@@ -269,6 +271,12 @@ async def get_payment_detail(db: AsyncSession, payment_id: int) -> PaymentDetail
         ),
         company_commission_currency_code=(
             breakdown.company_commission_currency_code if breakdown is not None else None
+        ),
+        client_balance_effect_eur=(
+            breakdown.net_client_balance_effect_eur if breakdown is not None else None
+        ),
+        client_balance_effect_currency_code=(
+            breakdown.client_balance_effect_currency_code if breakdown is not None else None
         ),
         payment_direction=payment.payment_direction,
         payment_kind=payment.payment_kind,
@@ -466,13 +474,52 @@ async def find_transfer_counterpart(db: AsyncSession, payment: Payment) -> Payme
             Payment.counterparty_id.is_(None),
             Payment.payment_kind == PaymentKind.EXPENSE,
             Payment.payment_direction == _opposite_payment_direction(payment.payment_direction),
-            Payment.amount_original == payment.amount_original,
             Payment.currency_code == payment.currency_code,
-            _nullable_payment_field_equals(Payment.booking_date, payment.booking_date),
-            _nullable_payment_field_equals(Payment.value_date, payment.value_date),
-            _nullable_payment_field_equals(Payment.transaction_date, payment.transaction_date),
+            Payment.company_bank_account_id != payment.company_bank_account_id,
         )
-        .order_by(func.abs(Payment.id - payment.id).asc())
+        .order_by(
+            case((Payment.amount_original == payment.amount_original, 0), else_=1),
+            case((_nullable_payment_field_equals(Payment.booking_date, payment.booking_date), 0), else_=1),
+            case((_nullable_payment_field_equals(Payment.value_date, payment.value_date), 0), else_=1),
+            case((_nullable_payment_field_equals(Payment.transaction_date, payment.transaction_date), 0), else_=1),
+            func.abs(Payment.id - payment.id).asc(),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def find_transfer_counterpart_for_payload(
+    db: AsyncSession,
+    *,
+    payment: Payment,
+    payload: PaymentCreateRequest,
+    resolved: dict,
+) -> Payment | None:
+    target_account = resolved.get("related_company_bank_account")
+    if target_account is None:
+        return None
+
+    result = await db.execute(
+        select(Payment)
+        .where(
+            Payment.id != payment.id,
+            Payment.company_id == target_account.company_id,
+            Payment.company_bank_account_id == target_account.id,
+            Payment.related_company_id == resolved["company"].id,
+            Payment.client_id.is_(None),
+            Payment.counterparty_id.is_(None),
+            Payment.payment_kind == PaymentKind.EXPENSE,
+            Payment.payment_direction == _opposite_payment_direction(payload.payment_direction),
+            Payment.currency_code == resolved["currency_code"],
+        )
+        .order_by(
+            case((Payment.amount_original == payload.amount_original, 0), else_=1),
+            case((_nullable_payment_field_equals(Payment.booking_date, payload.booking_date), 0), else_=1),
+            case((_nullable_payment_field_equals(Payment.value_date, payload.value_date), 0), else_=1),
+            case((_nullable_payment_field_equals(Payment.transaction_date, payload.transaction_date), 0), else_=1),
+            func.abs(Payment.id - payment.id).asc(),
+        )
         .limit(1)
     )
     return result.scalar_one_or_none()
@@ -501,6 +548,13 @@ async def sync_transfer_counterpart(
         return
 
     counterpart = old_transfer_counterpart
+    if counterpart is None:
+        counterpart = await find_transfer_counterpart_for_payload(
+            db,
+            payment=payment,
+            payload=payload,
+            resolved=resolved,
+        )
     if counterpart is None:
         counterpart = Payment(status=PaymentStatus.PENDING_REVIEW, is_manual=True)
         db.add(counterpart)
@@ -553,6 +607,7 @@ async def upsert_transfer_counterpart_breakdown(db: AsyncSession, payment: Payme
         "client_commission_amount_original": None,
         "client_commission_amount_eur": Decimal("0"),
         "net_client_balance_effect_eur": payment.amount_eur,
+        "client_balance_effect_currency_code": payment.currency_code,
     }
 
     if breakdown is None:
@@ -676,6 +731,12 @@ def validate_financial_breakdown(payload: PaymentCreateRequest, amount_eur: Deci
         raise PaymentValidationError("vat_amount_eur cannot exceed amount_eur")
 
 
+def get_default_client_balance_effect_eur(payment: Payment) -> Decimal:
+    if payment.payment_direction == PaymentDirection.INCOMING:
+        return -payment.amount_eur
+    return payment.amount_eur
+
+
 async def upsert_payment_financial_breakdown(
     db: AsyncSession,
     *,
@@ -694,6 +755,12 @@ async def upsert_payment_financial_breakdown(
     company_commission_amount_eur = payload.company_commission_amount_eur
     company_commission_currency_code = (payload.company_commission_currency_code or "EUR").strip().upper()
     base_after_vat_eur = payment.amount_eur - vat_amount_eur
+    client_balance_effect_eur = (
+        payload.client_balance_effect_eur
+        if payload.client_balance_effect_eur is not None
+        else get_default_client_balance_effect_eur(payment)
+    )
+    client_balance_effect_currency_code = (payload.client_balance_effect_currency_code or currency_code).strip().upper()
     gross_amount_original = payment.amount_original
     vat_amount_original = vat_amount_eur if currency_code == "EUR" else None
     base_after_vat_original = (
@@ -719,7 +786,8 @@ async def upsert_payment_financial_breakdown(
         "own_expense_currency_code": own_expense_currency_code,
         "client_commission_amount_original": None,
         "client_commission_amount_eur": Decimal("0"),
-        "net_client_balance_effect_eur": base_after_vat_eur + company_commission_amount_eur,
+        "net_client_balance_effect_eur": client_balance_effect_eur,
+        "client_balance_effect_currency_code": client_balance_effect_currency_code,
     }
 
     if breakdown is None:

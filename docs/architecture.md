@@ -1,6 +1,6 @@
 # Architecture
 
-The project starts on `SQLite` for development speed and keeps the schema portable enough to move to `MySQL` later.
+The project runs on MariaDB/MySQL as the only supported persistence backend.
 
 ## Design rules
 

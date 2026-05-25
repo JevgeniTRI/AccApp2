@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.accounting import PaymentFinancialBreakdown
 from app.models.banking import Payment
 from app.models.enums import PaymentDirection
 from app.models.reference import Bank, Client, Company, CompanyBankAccount, CompanyClient, CompanyContact, Counterparty, Currency
@@ -862,24 +863,20 @@ async def list_client_overview(
     balances_by_client: dict[int, list[dict[str, object]]] = {}
 
     if client_ids:
+        client_balance_effect = case(
+            (PaymentFinancialBreakdown.net_client_balance_effect_eur.is_not(None), PaymentFinancialBreakdown.net_client_balance_effect_eur),
+            (Payment.payment_direction == PaymentDirection.INCOMING, -Payment.amount_eur),
+            else_=Payment.amount_eur,
+        )
         balances_result = await db.execute(
             select(
-                CompanyClient.client_id,
-                func.coalesce(CompanyBankAccount.currency_code, "EUR").label("currency_code"),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (Payment.payment_direction == PaymentDirection.INCOMING, Payment.amount_original),
-                            else_=-Payment.amount_original,
-                        )
-                    ),
-                    0,
-                ).label("balance"),
+                Payment.client_id,
+                func.coalesce(PaymentFinancialBreakdown.client_balance_effect_currency_code, Payment.currency_code).label("currency_code"),
+                func.coalesce(func.sum(client_balance_effect), 0).label("balance"),
             )
-            .join(CompanyBankAccount, CompanyBankAccount.company_id == CompanyClient.company_id)
-            .outerjoin(Payment, Payment.company_bank_account_id == CompanyBankAccount.id)
-            .where(CompanyClient.client_id.in_(client_ids))
-            .group_by(CompanyClient.client_id, CompanyBankAccount.currency_code)
+            .outerjoin(PaymentFinancialBreakdown, PaymentFinancialBreakdown.payment_id == Payment.id)
+            .where(Payment.client_id.in_(client_ids))
+            .group_by(Payment.client_id, func.coalesce(PaymentFinancialBreakdown.client_balance_effect_currency_code, Payment.currency_code))
         )
 
         for row in balances_result:

@@ -46,6 +46,7 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
           <th>Свои расходы</th>
           <th>Налог</th>
           <th>Доходы/Расходы</th>
+          <th>Зачет клиенту</th>
           <th>Клиент</th>
           <th>Комментарий</th>
           <th>Статус</th>
@@ -85,6 +86,11 @@ function PaymentsTable({ rows, onDelete, onEdit }) {
               <td>
                 {payment.income_expense_eur
                   ? formatAmount(payment.income_expense_eur, payment.company_commission_currency_code || 'EUR')
+                  : '-'}
+              </td>
+              <td>
+                {payment.client_balance_effect_eur !== null && payment.client_balance_effect_eur !== undefined
+                  ? formatAmount(payment.client_balance_effect_eur, payment.client_balance_effect_currency_code || payment.currency_code || 'EUR')
                   : '-'}
               </td>
               <td>{payment.client?.name || '-'}</td>

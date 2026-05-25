@@ -100,6 +100,8 @@ async def get_payments(
                 own_expense_currency_code=row["own_expense_currency_code"],
                 income_expense_eur=row["company_commission_amount_eur"],
                 company_commission_currency_code=row["company_commission_currency_code"],
+                client_balance_effect_eur=row["net_client_balance_effect_eur"],
+                client_balance_effect_currency_code=row["client_balance_effect_currency_code"],
                 payment_direction=row["payment_direction"],
                 payment_kind=row["payment_kind"],
                 status=row["status"],

@@ -10,7 +10,7 @@
 </defs>
 <rect width="100%" height="100%" fill="url(#bg)" />
 <text x="60" y="38" font-family="Georgia, serif" font-size="28" fill="#2f2417">Accounting DB Diagram</text>
-<text x="60" y="60" font-family="Segoe UI, sans-serif" font-size="14" fill="#64553d">Generated from SQLite schema</text>
+<text x="60" y="60" font-family="Segoe UI, sans-serif" font-size="14" fill="#64553d">Generated from MariaDB schema</text>
 <text x="60" y="92" font-family="Segoe UI, sans-serif" font-size="13" font-weight="700" fill="#7d6742">Reference</text>
 <text x="500" y="92" font-family="Segoe UI, sans-serif" font-size="13" font-weight="700" fill="#7d6742">Payments &amp; Banking</text>
 <text x="940" y="92" font-family="Segoe UI, sans-serif" font-size="13" font-weight="700" fill="#7d6742">Accounting</text>

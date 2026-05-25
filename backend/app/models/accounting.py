@@ -85,6 +85,7 @@ class PaymentFinancialBreakdown(BigIntPrimaryKeyMixin, TimestampMixin, Base):
     client_commission_amount_original: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
     client_commission_amount_eur: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     net_client_balance_effect_eur: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    client_balance_effect_currency_code: Mapped[str | None] = mapped_column(String(3))
 
     payment: Mapped["Payment"] = relationship(back_populates="financial_breakdown")
 

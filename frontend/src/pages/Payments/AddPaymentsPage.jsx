@@ -57,6 +57,11 @@ function inferPartyType(row) {
   return 'counterparty'
 }
 
+function getDefaultClientBalanceEffect(amount) {
+  const value = toNumber(amount)
+  return value ? String(-value) : ''
+}
+
 function createRow(bookingDate = '') {
   return {
     id: crypto.randomUUID(),
@@ -72,8 +77,11 @@ function createRow(bookingDate = '') {
     ownExpenseCurrency: 'EUR',
     incomeExpense: '',
     incomeExpenseCurrency: 'EUR',
+    clientBalanceEffect: '',
+    clientBalanceEffectManual: false,
+    clientBalanceEffectCurrency: 'EUR',
+    clientBalanceEffectCurrencyManual: false,
     clientText: '',
-    clientCurrency: 'EUR',
     comment: '',
     expanded: false,
     attachments: [],
@@ -81,12 +89,15 @@ function createRow(bookingDate = '') {
 }
 
 function hydrateRow(row) {
-  return {
+  const hydrated = {
     ...createRow(),
     ...row,
     partyType: inferPartyType(row),
     attachments: [],
   }
+  hydrated.clientBalanceEffectCurrency = row.clientBalanceEffectCurrency || row.clientCurrency || row.amountCurrency || 'EUR'
+  hydrated.clientBalanceEffectCurrencyManual = Boolean(row.clientBalanceEffectCurrencyManual)
+  return hydrated
 }
 
 function createInitialState() {
@@ -156,6 +167,12 @@ function createExistingAttachment(attachment) {
 function createRowFromPayment(payment) {
   const signedAmount =
     payment.payment_direction === 'outgoing' ? -Math.abs(toNumber(payment.amount_original)) : Math.abs(toNumber(payment.amount_original))
+  const defaultClientBalanceEffect = getDefaultClientBalanceEffect(signedAmount)
+  const savedClientBalanceEffect = payment.client_balance_effect_eur !== null && payment.client_balance_effect_eur !== undefined
+    ? String(toNumber(payment.client_balance_effect_eur))
+    : ''
+  const transactionCurrency = payment.currency_code || payment.company_bank_account?.currency_code || 'EUR'
+  const clientBalanceEffectCurrency = payment.client_balance_effect_currency_code || transactionCurrency
 
   return {
     ...createRow(),
@@ -176,15 +193,18 @@ function createRowFromPayment(payment) {
     relatedCompanyText: payment.related_company?.name || '',
     counterpartyName: payment.counterparty?.name || '',
     amount: String(signedAmount),
-    amountCurrency: payment.currency_code || payment.company_bank_account?.currency_code || 'EUR',
+    amountCurrency: transactionCurrency,
     tax: payment.vat_amount_eur ? String(toNumber(payment.vat_amount_eur)) : '',
     ownExpense: payment.own_expense_amount_eur ? String(toNumber(payment.own_expense_amount_eur)) : '',
     ownExpenseCurrency: payment.own_expense_currency_code || 'EUR',
     incomeExpense: payment.company_commission_amount_eur ? String(toNumber(payment.company_commission_amount_eur)) : '',
     incomeExpenseCurrency: payment.company_commission_currency_code || 'EUR',
+    clientBalanceEffect: savedClientBalanceEffect || defaultClientBalanceEffect,
+    clientBalanceEffectManual: Boolean(savedClientBalanceEffect && savedClientBalanceEffect !== defaultClientBalanceEffect),
+    clientBalanceEffectCurrency,
+    clientBalanceEffectCurrencyManual: clientBalanceEffectCurrency !== transactionCurrency,
     bookingDate: payment.booking_date || toDateInputValue(new Date()),
     clientText: payment.client?.name || '',
-    clientCurrency: payment.currency_code || payment.company_bank_account?.currency_code || 'EUR',
     comment: payment.notes || '',
     attachments: (payment.attachments || []).map(createExistingAttachment),
   }
@@ -401,6 +421,40 @@ export default function AddPaymentsPage() {
     setFormState((current) => ({
       ...current,
       rows: current.rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)),
+    }))
+  }
+
+  function updateRowAmount(rowId, value) {
+    setFormState((current) => ({
+      ...current,
+      rows: current.rows.map((row) => {
+        if (row.id !== rowId) {
+          return row
+        }
+
+        return {
+          ...row,
+          amount: value,
+          ...(row.clientBalanceEffectManual ? {} : { clientBalanceEffect: getDefaultClientBalanceEffect(value) }),
+        }
+      }),
+    }))
+  }
+
+  function updateRowAmountCurrency(rowId, value) {
+    setFormState((current) => ({
+      ...current,
+      rows: current.rows.map((row) => {
+        if (row.id !== rowId) {
+          return row
+        }
+
+        return {
+          ...row,
+          amountCurrency: value,
+          ...(row.clientBalanceEffectCurrencyManual ? {} : { clientBalanceEffectCurrency: value }),
+        }
+      }),
     }))
   }
 
@@ -664,7 +718,10 @@ export default function AddPaymentsPage() {
         const keepAttachmentIds = row.attachments
           .filter((attachment) => Number.isInteger(attachment.existingAttachmentId))
           .map((attachment) => attachment.existingAttachmentId)
-        const rowCurrency = row.partyType === 'clientCounterparty' ? row.clientCurrency : row.amountCurrency
+        const rowCurrency = row.amountCurrency
+        const clientBalanceEffect = row.partyType === 'clientCounterparty'
+          ? (row.clientBalanceEffect === '' ? -amount : toNumber(row.clientBalanceEffect))
+          : 0
         const basePaymentItem = {
           booking_date: row.bookingDate || formState.bookingDate,
           value_date: row.bookingDate || formState.bookingDate,
@@ -676,6 +733,8 @@ export default function AddPaymentsPage() {
           own_expense_currency_code: row.ownExpenseCurrency,
           company_commission_amount_eur: toNumber(row.incomeExpense),
           company_commission_currency_code: row.incomeExpenseCurrency,
+          client_balance_effect_eur: clientBalanceEffect,
+          client_balance_effect_currency_code: row.clientBalanceEffectCurrency || rowCurrency,
           client_id: client?.value ?? null,
           counterparty_name: counterpartyName,
           payment_purpose: paymentPurpose,
@@ -1004,6 +1063,7 @@ export default function AddPaymentsPage() {
                   <th>Налог</th>
                   <th>Свои расходы</th>
                   <th>Доходы/Расходы</th>
+                  <th>Зачет клиенту</th>
                   <th>Клиент</th>
                   <th>Комментарий</th>
                   <th />
@@ -1014,7 +1074,7 @@ export default function AddPaymentsPage() {
                   const amount = toNumber(row.amount)
                   const tax = Math.abs(toNumber(row.tax))
                   const amountWithoutTax = Math.abs(amount) - tax
-                  const settlementEffect = amountWithoutTax + toNumber(row.incomeExpense)
+                  const settlementEffect = row.clientBalanceEffect === '' ? -amount : toNumber(row.clientBalanceEffect)
 
                   return (
                     <Fragment key={row.id}>
@@ -1112,20 +1172,14 @@ export default function AddPaymentsPage() {
                               type="number"
                               step="0.01"
                               value={row.amount}
-                              onChange={(event) => updateRow(row.id, { amount: event.target.value })}
+                              onChange={(event) => updateRowAmount(row.id, event.target.value)}
                               placeholder="0.00"
                               className={amount > 0 ? "is-positive" : ""}
                             />
                             <select
                               className="add-payments-currency-select"
                               value={row.amountCurrency}
-                              onChange={(event) => {
-                                const currency = event.target.value
-                                updateRow(row.id, {
-                                  amountCurrency: currency,
-                                  ...(row.partyType === 'clientCounterparty' ? { clientCurrency: currency } : {}),
-                                })
-                              }}
+                              onChange={(event) => updateRowAmountCurrency(row.id, event.target.value)}
                               aria-label="Валюта суммы"
                             >
                               {CURRENCY_OPTIONS.map((option) => (
@@ -1195,22 +1249,27 @@ export default function AddPaymentsPage() {
                         </td>
                         <td>
                           {row.partyType === 'clientCounterparty' ? (
-                            <div className="add-payments-client-field">
+                            <div className="add-payments-money-field">
                               <input
-                                list="clients-options"
-                                type="text"
-                                value={row.clientText}
-                                onChange={(event) => updateRow(row.id, { clientText: event.target.value })}
-                                placeholder="Клиент из справочника"
+                                type="number"
+                                step="0.01"
+                                value={row.clientBalanceEffect}
+                                onChange={(event) => updateRow(row.id, {
+                                  clientBalanceEffect: event.target.value,
+                                  clientBalanceEffectManual: true,
+                                })}
+                                placeholder="0.00"
+                                className={toNumber(row.clientBalanceEffect) > 0 ? "is-positive" : ""}
+                                aria-label="Зачет клиенту"
                               />
                               <select
                                 className="add-payments-currency-select"
-                                value={row.clientCurrency}
+                                value={row.clientBalanceEffectCurrency}
                                 onChange={(event) => updateRow(row.id, {
-                                  clientCurrency: event.target.value,
-                                  amountCurrency: event.target.value,
+                                  clientBalanceEffectCurrency: event.target.value,
+                                  clientBalanceEffectCurrencyManual: true,
                                 })}
-                                aria-label="Валюта платежа к клиенту"
+                                aria-label="Валюта зачета клиенту"
                               >
                                 {CURRENCY_OPTIONS.map((option) => (
                                   <option key={option.value} value={option.value}>
@@ -1219,6 +1278,21 @@ export default function AddPaymentsPage() {
                                 ))}
                               </select>
                             </div>
+                          ) : (
+                            <div className="add-payments-table__party-placeholder">
+                              <span>-</span>
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          {row.partyType === 'clientCounterparty' ? (
+                            <input
+                              list="clients-options"
+                              type="text"
+                              value={row.clientText}
+                              onChange={(event) => updateRow(row.id, { clientText: event.target.value })}
+                              placeholder="Клиент из справочника"
+                            />
                           ) : (
                             <div className="add-payments-table__party-placeholder">
                               <span>-</span>
@@ -1284,7 +1358,7 @@ export default function AddPaymentsPage() {
                       {row.expanded ? (
                         <tr className="add-payments-breakdown-row">
                           <td />
-                          <td colSpan={11}>
+                          <td colSpan={12}>
                             <div className="add-payments-breakdown">
                               <div>
                                 <span>Сумма без налога:</span>
@@ -1308,7 +1382,7 @@ export default function AddPaymentsPage() {
                               </div>
                               <div>
                                 <span>В зачёт клиента:</span>
-                                <strong>{formatAmount(settlementEffect)}</strong>
+                                <strong>{formatAmount(settlementEffect, row.clientBalanceEffectCurrency || row.amountCurrency)}</strong>
                               </div>
                             </div>
                           </td>

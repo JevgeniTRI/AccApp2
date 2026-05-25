@@ -1,6 +1,7 @@
-from pathlib import Path
 from decimal import Decimal
+from pathlib import Path
 from secrets import token_urlsafe
+from urllib.parse import urlparse
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     app_name: str = "Accounting App API"
-    database_url: str = "sqlite:///./accounting.db"
+    database_url: str
     auth_cookie_name: str = "accountapp_session"
     auth_session_secret: str = token_urlsafe(48)
     auth_session_ttl_seconds: int = 60 * 60 * 12
@@ -42,21 +43,14 @@ class Settings(BaseSettings):
 
     @field_validator("database_url", mode="before")
     @classmethod
-    def normalize_database_url(cls, value: str) -> str:
-        if not isinstance(value, str):
-            return value
-        if not value.startswith("sqlite:///"):
-            return value
-
-        suffix = value.removeprefix("sqlite:///")
-        if suffix == ":memory:":
-            return value
-
-        path = Path(suffix)
-        if not path.is_absolute():
-            path = (BASE_DIR / path).resolve()
-
-        return f"sqlite:///{path.as_posix()}"
+    def validate_database_url(cls, value: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("DATABASE_URL is required")
+        normalized = value.strip()
+        scheme = urlparse(normalized).scheme
+        if scheme not in {"mysql", "mysql+aiomysql"}:
+            raise ValueError("DATABASE_URL must use the mysql or mysql+aiomysql dialect")
+        return normalized
 
     @property
     def cbr_target_codes(self) -> tuple[str, ...]:
@@ -64,8 +58,8 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
-        if self.database_url.startswith("sqlite:///"):
-            return self.database_url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+        if self.database_url.startswith("mysql://"):
+            return self.database_url.replace("mysql://", "mysql+aiomysql://", 1)
         return self.database_url
 
     @property

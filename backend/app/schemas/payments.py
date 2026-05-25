@@ -44,6 +44,8 @@ class PaymentRow(BaseModel):
     own_expense_currency_code: str | None = None
     income_expense_eur: Decimal | None = None
     company_commission_currency_code: str | None = None
+    client_balance_effect_eur: Decimal | None = None
+    client_balance_effect_currency_code: str | None = None
     payment_direction: PaymentDirection
     payment_kind: PaymentKind
     status: PaymentStatus
@@ -85,6 +87,8 @@ class PaymentDetailResponse(BaseModel):
     own_expense_currency_code: str | None = None
     company_commission_amount_eur: Decimal | None = None
     company_commission_currency_code: str | None = None
+    client_balance_effect_eur: Decimal | None = None
+    client_balance_effect_currency_code: str | None = None
     payment_direction: PaymentDirection
     payment_kind: PaymentKind
     status: PaymentStatus
@@ -111,6 +115,8 @@ class PaymentCreateRequest(BaseModel):
     own_expense_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     company_commission_amount_eur: Decimal = Decimal("0")
     company_commission_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
+    client_balance_effect_eur: Decimal | None = None
+    client_balance_effect_currency_code: str | None = Field(default=None, min_length=3, max_length=3)
     payment_direction: PaymentDirection
     related_company_id: int | None = None
     related_company_bank_account_id: int | None = None

@@ -1,4 +1,4 @@
-import { fetchCompanyBankAccountsLookup, fetchLookup } from '../../lib/api'
+import { fetchCompanyBankAccountsLookup, fetchLookup } from '../../lib/api.js'
 
 export const CURRENCY_OPTIONS = [
   { value: 'RUB', label: 'RUB' },

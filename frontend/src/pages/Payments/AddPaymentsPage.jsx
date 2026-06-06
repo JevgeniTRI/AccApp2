@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import LookupField from '../../components/LookupField/LookupField'
+import DeletePaymentDialog from './DeletePaymentDialog'
 import {
   buildPaymentAttachmentUrl,
   createPaymentsBatch,
@@ -34,6 +35,7 @@ import {
   toDateInputValue,
   toNumber,
 } from './paymentUtils'
+import { findCompanyBankAccountOption, isAccountTransferRow } from './paymentTransferUtils'
 import './AddPaymentsPage.css'
 
 const DRAFT_STORAGE_KEY = 'acc-app:add-payments-draft'
@@ -113,15 +115,6 @@ function createInitialState() {
 
 function buildRowNotes(row) {
   return row.comment.trim() || null
-}
-
-function isAccountTransferRow(row, bankAccount) {
-  return (
-    row.partyType === 'company' &&
-    row.relatedCompany?.bankAccountId &&
-    bankAccount?.value &&
-    Number(row.relatedCompany.bankAccountId) !== Number(bankAccount.value)
-  )
 }
 
 function rowHasData(row) {
@@ -253,6 +246,7 @@ export default function AddPaymentsPage() {
   const [formState, setFormState] = useState(() => createInitialState())
   const [message, setMessage] = useState({ type: '', text: '' })
   const [isSaving, setIsSaving] = useState(false)
+  const [deleteState, setDeleteState] = useState({ payment: null, isDeleting: false })
   const [isLoadingPayment, setIsLoadingPayment] = useState(isEditMode)
   const [initialEditState, setInitialEditState] = useState(null)
   const [balanceState, setBalanceState] = useState({
@@ -610,24 +604,33 @@ export default function AddPaymentsPage() {
       return row.relatedCompany
     }
 
+    const accountOptions = optionsState.companyPaymentOptions || []
     if (row.relatedCompany && row.relatedCompanyText === row.relatedCompany.label) {
-      return row.relatedCompany
+      return findCompanyBankAccountOption(row.relatedCompany, accountOptions) || row.relatedCompany
     }
 
     const normalizedText = row.relatedCompanyText.trim()
     const seedOptions = [
-      ...(optionsState.companyPaymentOptions || []),
+      ...accountOptions,
       ...optionsState.companies,
     ]
     const seedMatch = findLookupOption('companies', normalizedText, seedOptions)
     if (seedMatch?.bankAccountId) {
       return seedMatch
     }
+    const seedAccountMatch = findCompanyBankAccountOption(seedMatch, accountOptions)
+    if (seedAccountMatch) {
+      return seedAccountMatch
+    }
 
     const liveAccountOptions = await loadCompanyPaymentOptions(normalizedText)
     const liveAccountMatch = findLookupOption('companies', normalizedText, liveAccountOptions)
     if (liveAccountMatch?.bankAccountId) {
       return liveAccountMatch
+    }
+    const liveAccountByCompany = findCompanyBankAccountOption(seedMatch, liveAccountOptions)
+    if (liveAccountByCompany) {
+      return liveAccountByCompany
     }
 
     const existingCompany = await resolveLookupOption(
@@ -638,7 +641,7 @@ export default function AddPaymentsPage() {
     ).catch(() => null)
 
     if (existingCompany) {
-      return existingCompany
+      return findCompanyBankAccountOption(existingCompany, liveAccountOptions) || existingCompany
     }
 
     return {
@@ -696,6 +699,9 @@ export default function AddPaymentsPage() {
         if (row.partyType === 'company') {
           if (!relatedCompany) {
             throw new Error('Для типа "Компания" нужно выбрать компанию из справочника')
+          }
+          if (!relatedCompany.bankAccountId) {
+            throw new Error('Для перекидки между компаниями нужно выбрать компанию с банковским счётом')
           }
         }
 
@@ -930,18 +936,36 @@ export default function AddPaymentsPage() {
       return
     }
 
-    const isConfirmed = window.confirm('Удалить этот платёж? Действие нельзя отменить.')
-    if (!isConfirmed) {
-      return
-    }
-
     setIsSaving(true)
     setMessage({ type: '', text: '' })
     try {
-      await deletePayment(paymentId)
-      setMessage({ type: 'success', text: 'Платёж удалён' })
+      const payment = await fetchPayment(paymentId)
+      setDeleteState({ payment, isDeleting: false })
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: error.response?.data?.detail || error.message || 'Не удалось загрузить платёж для удаления',
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  async function confirmDeletePayment(deleteCounterpart) {
+    if (!deleteState.payment) {
+      return
+    }
+
+    setDeleteState((current) => ({ ...current, isDeleting: true }))
+    setIsSaving(true)
+    setMessage({ type: '', text: '' })
+    try {
+      await deletePayment(deleteState.payment.id, { deleteCounterpart })
+      setDeleteState({ payment: null, isDeleting: false })
+      setMessage({ type: 'success', text: deleteCounterpart ? 'Платёж и парная запись удалены' : 'Платёж удалён' })
       window.setTimeout(() => navigate('/payments'), 400)
     } catch (error) {
+      setDeleteState({ payment: null, isDeleting: false })
       setMessage({
         type: 'error',
         text: error.response?.data?.detail || error.message || 'Не удалось удалить платёж',
@@ -1464,6 +1488,14 @@ export default function AddPaymentsPage() {
           </div>
         </div>
       </div>
+      <DeletePaymentDialog
+        payment={deleteState.payment}
+        isDeleting={deleteState.isDeleting}
+        onDeleteOne={() => confirmDeletePayment(false)}
+        onDeleteBoth={() => confirmDeletePayment(true)}
+        onCancel={() => setDeleteState({ payment: null, isDeleting: false })}
+      />
+
     </div>
   )
 }

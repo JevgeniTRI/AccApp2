@@ -1,7 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { Download, Eye, Filter, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal } from 'lucide-react'
+import { Download, Eye, Filter, Paperclip, Plus, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import LookupField from '../../components/LookupField/LookupField'
+import DeletePaymentDialog from './DeletePaymentDialog'
 import {
   Button,
   DataCard,
@@ -14,7 +15,7 @@ import {
   TableEmpty,
   TableWrap,
 } from '../../components/ui'
-import { buildPaymentAttachmentUrl, deletePayment, downloadPaymentsExport, fetchPayments, fetchPaymentsMeta } from '../../lib/api'
+import { buildPaymentAttachmentUrl, deletePayment, downloadPaymentsExport, fetchPayment, fetchPayments, fetchPaymentsMeta } from '../../lib/api'
 import {
   formatAmount,
   formatDate,
@@ -23,6 +24,42 @@ import {
   toNumber,
 } from './paymentUtils'
 import './PaymentsPage.css'
+
+const PAYMENTS_FILTERS_STORAGE_KEY = 'jevgeniworks.payments.filters'
+
+function getDefaultPaymentsFilters() {
+  return {
+    dateFrom: '',
+    dateTo: toDateInputValue(new Date()),
+    search: '',
+    company: null,
+    companyText: '',
+    bank: null,
+    bankText: '',
+    currency: null,
+    currencyText: '',
+    client: null,
+    clientText: '',
+    includeIncoming: true,
+    includeOutgoing: true,
+  }
+}
+
+function loadStoredPaymentsFilters() {
+  try {
+    const rawValue = window.localStorage.getItem(PAYMENTS_FILTERS_STORAGE_KEY)
+    if (!rawValue) {
+      return getDefaultPaymentsFilters()
+    }
+
+    return {
+      ...getDefaultPaymentsFilters(),
+      ...JSON.parse(rawValue),
+    }
+  } catch {
+    return getDefaultPaymentsFilters()
+  }
+}
 
 function EmptyState({ search }) {
   return (
@@ -137,21 +174,8 @@ export default function PaymentsPage() {
     items: [],
   })
   const [exportState, setExportState] = useState({ isLoading: false, error: '' })
-  const [filters, setFilters] = useState({
-    dateFrom: '',
-    dateTo: toDateInputValue(new Date()),
-    search: '',
-    company: null,
-    companyText: '',
-    bank: null,
-    bankText: '',
-    currency: null,
-    currencyText: '',
-    client: null,
-    clientText: '',
-    includeIncoming: true,
-    includeOutgoing: true,
-  })
+  const [deleteState, setDeleteState] = useState({ payment: null, isDeleting: false })
+  const [filters, setFilters] = useState(loadStoredPaymentsFilters)
 
   const deferredSearch = useDeferredValue(filters.search)
 
@@ -200,6 +224,10 @@ export default function PaymentsPage() {
       isCancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(PAYMENTS_FILTERS_STORAGE_KEY, JSON.stringify(filters))
+  }, [filters])
 
   useEffect(() => {
     let isCancelled = false
@@ -264,6 +292,10 @@ export default function PaymentsPage() {
     }))
   }
 
+  function clearAllFilters() {
+    setFilters(getDefaultPaymentsFilters())
+  }
+
   function getExportFilename(response, fallback) {
     const disposition = response.headers?.['content-disposition'] || ''
     const match = disposition.match(/filename="?([^";]+)"?/i)
@@ -294,15 +326,29 @@ export default function PaymentsPage() {
   }
 
   async function handleDelete(paymentId) {
-    const isConfirmed = window.confirm('Удалить этот платёж? Действие нельзя отменить.')
-    if (!isConfirmed) {
+    try {
+      const payment = await fetchPayment(paymentId)
+      setDeleteState({ payment, isDeleting: false })
+    } catch (error) {
+      setPaymentsState((current) => ({
+        ...current,
+        error: error.response?.data?.detail || 'Не удалось загрузить платёж для удаления',
+      }))
+    }
+  }
+
+  async function confirmDelete(deleteCounterpart) {
+    if (!deleteState.payment) {
       return
     }
 
+    setDeleteState((current) => ({ ...current, isDeleting: true }))
     try {
-      await deletePayment(paymentId)
+      await deletePayment(deleteState.payment.id, { deleteCounterpart })
+      setDeleteState({ payment: null, isDeleting: false })
       setRefreshKey((current) => current + 1)
     } catch (error) {
+      setDeleteState({ payment: null, isDeleting: false })
       setPaymentsState((current) => ({
         ...current,
         error: error.response?.data?.detail || 'Не удалось удалить платёж',
@@ -436,6 +482,10 @@ export default function PaymentsPage() {
                     onChange={(event) => updateFilter('includeIncoming', event.target.checked)}
                   />
                 </label>
+                <Button className="payments-clear-filters" onClick={clearAllFilters}>
+                  <X size={16} />
+                  Очистить все фильтры
+                </Button>
               </div>
             </div>
           </div>
@@ -506,6 +556,14 @@ export default function PaymentsPage() {
           },
         ]}
       />
+      <DeletePaymentDialog
+        payment={deleteState.payment}
+        isDeleting={deleteState.isDeleting}
+        onDeleteOne={() => confirmDelete(false)}
+        onDeleteBoth={() => confirmDelete(true)}
+        onCancel={() => setDeleteState({ payment: null, isDeleting: false })}
+      />
+
     </PageShell>
   )
 }

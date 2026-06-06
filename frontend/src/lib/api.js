@@ -72,8 +72,12 @@ export async function updatePayment(paymentId, payload) {
   return data
 }
 
-export async function deletePayment(paymentId) {
-  await api.delete(`/payments/${paymentId}`)
+export async function deletePayment(paymentId, options = {}) {
+  await api.delete(`/payments/${paymentId}`, {
+    params: {
+      delete_counterpart: options.deleteCounterpart || undefined,
+    },
+  })
 }
 
 export async function createPaymentsBatch(items) {

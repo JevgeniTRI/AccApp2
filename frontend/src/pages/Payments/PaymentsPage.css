@@ -70,6 +70,15 @@
   accent-color: #1f2535;
 }
 
+.payments-clear-filters {
+  min-height: 36px;
+  border-color: rgba(184, 35, 35, 0.18);
+  color: var(--danger-text);
+  background: rgba(184, 35, 35, 0.04);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
 .payments-status {
   display: flex;
   align-items: center;

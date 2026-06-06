@@ -256,9 +256,13 @@ async def put_payment(
 
 
 @router.delete("/{payment_id}", status_code=204)
-async def delete_payment_endpoint(payment_id: int, db: AsyncSession = Depends(get_db)) -> None:
+async def delete_payment_endpoint(
+    payment_id: int,
+    delete_counterpart: bool = False,
+    db: AsyncSession = Depends(get_db),
+) -> None:
     try:
-        await delete_payment(db, payment_id)
+        await delete_payment(db, payment_id, delete_counterpart=delete_counterpart)
         await db.commit()
     except PaymentValidationError as exc:
         await db.rollback()

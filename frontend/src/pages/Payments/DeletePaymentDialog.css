@@ -1,0 +1,72 @@
+.delete-payment-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.delete-payment-dialog__backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(12, 16, 28, 0.42);
+  backdrop-filter: blur(5px);
+}
+
+.delete-payment-dialog__panel {
+  position: relative;
+  width: min(520px, 100%);
+  padding: 22px;
+  border: 1px solid rgba(219, 62, 62, 0.16);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 26px 70px rgba(10, 14, 28, 0.24);
+}
+
+.delete-payment-dialog__panel h2 {
+  margin: 0 0 8px;
+  color: var(--text-main);
+  font-size: 22px;
+}
+
+.delete-payment-dialog__panel p {
+  margin: 0;
+  color: var(--muted-text);
+  line-height: 1.5;
+}
+
+.delete-payment-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+.delete-payment-dialog__button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.delete-payment-dialog__button.is-danger {
+  color: #db3e3e;
+}
+
+.delete-payment-dialog__button.is-primary-danger {
+  border-color: rgba(219, 62, 62, 0.18);
+  background: #db3e3e;
+  color: #fff;
+}
+
+.delete-payment-dialog__button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}

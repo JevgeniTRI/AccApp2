@@ -35,7 +35,7 @@ import {
   toDateInputValue,
   toNumber,
 } from './paymentUtils'
-import { findCompanyBankAccountOption, isAccountTransferRow } from './paymentTransferUtils'
+import { findCompanyBankAccountOption, getTransferPaymentDirections, isAccountTransferRow } from './paymentTransferUtils'
 import './AddPaymentsPage.css'
 
 const DRAFT_STORAGE_KEY = 'acc-app:add-payments-draft'
@@ -752,6 +752,7 @@ export default function AddPaymentsPage() {
         const isTransferRow = isAccountTransferRow({ ...row, relatedCompany }, bankAccount)
 
         if (isTransferRow && !isEditMode) {
+          const transferDirections = getTransferPaymentDirections(amount)
           items.push({
             ...basePaymentItem,
             company_bank_account_id: bankAccount.value,
@@ -759,7 +760,7 @@ export default function AddPaymentsPage() {
             vat_amount_eur: 0,
             own_expense_amount_eur: 0,
             company_commission_amount_eur: 0,
-            payment_direction: 'outgoing',
+            payment_direction: transferDirections.primary,
             related_company_id: relatedCompany.value,
             related_company_bank_account_id: relatedCompany.bankAccountId,
           })
@@ -770,7 +771,7 @@ export default function AddPaymentsPage() {
             vat_amount_eur: 0,
             own_expense_amount_eur: 0,
             company_commission_amount_eur: 0,
-            payment_direction: 'incoming',
+            payment_direction: transferDirections.counterpart,
             related_company_id: bankAccount.companyId ?? null,
             related_company_bank_account_id: bankAccount.value,
             payment_purpose: bankAccount.label || bankAccount.companyName || paymentPurpose,

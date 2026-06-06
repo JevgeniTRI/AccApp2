@@ -1,10 +1,17 @@
 export function isAccountTransferRow(row, bankAccount) {
-  return (
+  return Boolean(
     row.partyType === 'company' &&
     row.relatedCompany?.bankAccountId &&
     bankAccount?.value &&
     Number(row.relatedCompany.bankAccountId) !== Number(bankAccount.value)
   )
+}
+
+export function getTransferPaymentDirections(amount) {
+  const numericAmount = Number(amount)
+  return numericAmount >= 0
+    ? { primary: 'incoming', counterpart: 'outgoing' }
+    : { primary: 'outgoing', counterpart: 'incoming' }
 }
 
 export function normalizeLookupText(value) {

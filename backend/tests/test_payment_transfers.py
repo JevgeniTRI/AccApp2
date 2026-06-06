@@ -5,6 +5,7 @@ from unittest import IsolatedAsyncioTestCase, TestCase, main
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.models.enums import PaymentDirection, PaymentKind
+from app.models.banking import Payment
 from app.models.reference import Bank, Company, CompanyBankAccount
 from app.schemas.payments import PaymentCreateRequest
 from app.services.payments import (
@@ -16,6 +17,7 @@ from app.services.payments import (
     is_company_transfer_payload,
     payloads_are_transfer_counterparts,
     resolve_payment_payload,
+    sync_transfer_counterpart,
 )
 
 
@@ -149,6 +151,44 @@ class PaymentTransferServiceTests(IsolatedAsyncioTestCase):
         assert payment.company_bank_account_id == 10
         sync_counterpart.assert_awaited_once()
         assert sync_counterpart.await_args.kwargs["old_transfer_counterpart"] is None
+
+    async def test_sync_transfer_counterpart_for_incoming_payment_creates_outgoing_counterpart(self):
+        added = []
+        db = SimpleNamespace(add=Mock(side_effect=added.append), flush=AsyncMock())
+        payload = make_payload(payment_direction=PaymentDirection.INCOMING)
+        payment = Payment(id=100)
+        resolved = {
+            "company": SimpleNamespace(id=1, legal_name="Company A", short_name="A"),
+            "company_bank_account": SimpleNamespace(id=10, company_id=1),
+            "related_company": SimpleNamespace(id=2, legal_name="Company B", short_name="B"),
+            "related_company_bank_account": SimpleNamespace(id=20, company_id=2),
+            "client": None,
+            "counterparty": None,
+            "currency_code": "EUR",
+            "amount_eur": Decimal("100.00"),
+        }
+
+        with (
+            patch("app.services.payments.find_transfer_counterpart_for_payload", new=AsyncMock(return_value=None)),
+            patch("app.services.payments.upsert_transfer_counterpart_breakdown", new=AsyncMock()),
+            patch("app.services.payments.delete_payment_attachments", new=AsyncMock()),
+        ):
+            await sync_transfer_counterpart(
+                db,
+                payment=payment,
+                payload=payload,
+                resolved=resolved,
+                old_transfer_counterpart=None,
+            )
+
+        assert len(added) == 1
+        counterpart = added[0]
+        assert counterpart.company_id == 2
+        assert counterpart.company_bank_account_id == 20
+        assert counterpart.related_company_id == 1
+        assert counterpart.payment_direction == PaymentDirection.OUTGOING
+        assert counterpart.amount_original == Decimal("100.00")
+        assert counterpart.amount_eur == Decimal("100.00")
 
     async def test_create_payments_batch_does_not_auto_sync_explicit_transfer_pair(self):
         payload = make_payload()

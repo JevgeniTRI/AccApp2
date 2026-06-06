@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   findCompanyBankAccountOption,
+  getTransferPaymentDirections,
   hasTransferCounterpart,
   isAccountTransferRow,
 } from './paymentTransferUtils.js'
@@ -15,6 +16,20 @@ const targetAccount = {
   label: 'Target OÜ | LHV | EUR | EE123',
   bankAccountId: 2,
 }
+
+test('getTransferPaymentDirections keeps positive transfer on selected account as incoming', () => {
+  assert.deepEqual(
+    getTransferPaymentDirections(10),
+    { primary: 'incoming', counterpart: 'outgoing' },
+  )
+})
+
+test('getTransferPaymentDirections keeps negative transfer on selected account as outgoing', () => {
+  assert.deepEqual(
+    getTransferPaymentDirections(-10),
+    { primary: 'outgoing', counterpart: 'incoming' },
+  )
+})
 
 test('findCompanyBankAccountOption returns the only bank account for a selected company', () => {
   const selectedCompany = { value: 42, label: 'Target OÜ' }
@@ -82,3 +97,80 @@ test('hasTransferCounterpart detects payment detail with counterpart bank accoun
     false,
   )
 })
+
+test('getTransferPaymentDirections treats positive numeric string as incoming on selected account', () => {
+  assert.deepEqual(
+    getTransferPaymentDirections('10'),
+    { primary: 'incoming', counterpart: 'outgoing' },
+  )
+})
+
+test('getTransferPaymentDirections treats negative numeric string as outgoing on selected account', () => {
+  assert.deepEqual(
+    getTransferPaymentDirections('-10'),
+    { primary: 'outgoing', counterpart: 'incoming' },
+  )
+})
+
+test('getTransferPaymentDirections treats zero as incoming on selected account', () => {
+  assert.deepEqual(
+    getTransferPaymentDirections(0),
+    { primary: 'incoming', counterpart: 'outgoing' },
+  )
+})
+
+test('getTransferPaymentDirections keeps negative decimal as outgoing on selected account', () => {
+  assert.deepEqual(
+    getTransferPaymentDirections(-10.55),
+    { primary: 'outgoing', counterpart: 'incoming' },
+  )
+})
+
+test('isAccountTransferRow treats matching string and numeric account ids as same account', () => {
+  assert.equal(
+    isAccountTransferRow(
+      { partyType: 'company', relatedCompany: { bankAccountId: '10' } },
+      sourceBankAccount,
+    ),
+    false,
+  )
+})
+
+test('isAccountTransferRow returns false without selected bank account', () => {
+  assert.equal(
+    isAccountTransferRow(
+      { partyType: 'company', relatedCompany: { bankAccountId: 2 } },
+      null,
+    ),
+    false,
+  )
+})
+
+test('isAccountTransferRow returns false without related company bank account', () => {
+  assert.equal(
+    isAccountTransferRow(
+      { partyType: 'company', relatedCompany: { bankAccountId: null } },
+      sourceBankAccount,
+    ),
+    false,
+  )
+})
+
+test('findCompanyBankAccountOption matches company name case-insensitively', () => {
+  assert.deepEqual(
+    findCompanyBankAccountOption({ label: 'target oü' }, [targetAccount]),
+    targetAccount,
+  )
+})
+
+test('findCompanyBankAccountOption returns null for unknown company text', () => {
+  assert.equal(
+    findCompanyBankAccountOption({ label: 'Missing OÜ' }, [targetAccount]),
+    null,
+  )
+})
+
+test('hasTransferCounterpart returns false for missing payment detail', () => {
+  assert.equal(hasTransferCounterpart(null), false)
+})
+

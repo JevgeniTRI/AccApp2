@@ -7,11 +7,12 @@ import json
 import time
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
-from app.models.auth import User
+from app.core.permissions import normalize_tab_keys
+from app.models.auth import User, UserTabPermission
 
 
 HASH_ALGORITHM = "pbkdf2_sha256"
@@ -116,3 +117,20 @@ async def get_user_from_token(db: AsyncSession, token: str | None) -> User | Non
     if user is None or not user.is_active:
         return None
     return user
+
+
+
+async def get_user_tab_keys(db: AsyncSession, user_id: int) -> set[str]:
+    result = await db.execute(
+        select(UserTabPermission.tab_key).where(UserTabPermission.user_id == user_id)
+    )
+    return set(result.scalars().all())
+
+
+async def replace_user_tab_keys(db: AsyncSession, user: User, tab_keys: list[str]) -> set[str]:
+    normalized_tab_keys = normalize_tab_keys(tab_keys)
+    await db.execute(delete(UserTabPermission).where(UserTabPermission.user_id == user.id))
+    for tab_key in sorted(normalized_tab_keys):
+        db.add(UserTabPermission(user_id=user.id, tab_key=tab_key))
+    await db.flush()
+    return normalized_tab_keys

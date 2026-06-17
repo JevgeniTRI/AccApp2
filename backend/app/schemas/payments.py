@@ -75,6 +75,7 @@ class BankAccountBalanceResponse(BaseModel):
 
 class PaymentDetailResponse(BaseModel):
     id: int
+    transfer_pair_id: int | None = None
     company_bank_account: BankAccountLookupItem
     booking_date: date
     value_date: date | None = None

@@ -42,6 +42,6 @@ export function findCompanyBankAccountOption(companyOption, accountOptions) {
 }
 
 export function hasTransferCounterpart(payment) {
-  return Boolean(payment?.related_company?.bank_account_id)
+  return Boolean(payment?.transfer_pair_id)
 }
 

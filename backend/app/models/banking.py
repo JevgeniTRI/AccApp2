@@ -134,6 +134,7 @@ class Payment(BigIntPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     related_company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id"), index=True)
+    transfer_pair_id: Mapped[int | None] = mapped_column(ForeignKey("payments.id", ondelete="SET NULL"), index=True)
     client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), index=True)
     counterparty_id: Mapped[int | None] = mapped_column(ForeignKey("counterparties.id"), index=True)
     counterparty_name: Mapped[str | None] = mapped_column(String(255))

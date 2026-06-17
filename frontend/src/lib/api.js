@@ -218,3 +218,19 @@ export async function updateCounterparty(counterpartyId, payload) {
 export async function deleteCounterparty(counterpartyId) {
   await api.delete(`/counterparties/${counterpartyId}`)
 }
+
+
+export async function fetchAdminUsers() {
+  const { data } = await api.get('/admin/users')
+  return data
+}
+
+export async function createAdminUser(payload) {
+  const { data } = await api.post('/admin/users', payload)
+  return data
+}
+
+export async function updateAdminUserAccess(userId, payload) {
+  const { data } = await api.put(`/admin/users/${userId}`, payload)
+  return data
+}

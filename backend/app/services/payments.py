@@ -239,7 +239,10 @@ async def get_payment_detail(db: AsyncSession, payment_id: int) -> PaymentDetail
         .order_by(PaymentAttachment.id.asc())
     )
     attachments = list(attachments_result.scalars().all())
-    transfer_counterpart = await find_transfer_counterpart(db, payment)
+    transfer_counterpart = await get_transfer_counterpart(db, payment)
+    transfer_pair_id = transfer_counterpart.id if transfer_counterpart is not None else None
+    if transfer_counterpart is None:
+        transfer_counterpart = await find_legacy_transfer_counterpart(db, payment)
 
     account_reference = (
         company_bank_account.iban or company_bank_account.account_number or f"Account #{company_bank_account.id}"
@@ -248,6 +251,7 @@ async def get_payment_detail(db: AsyncSession, payment_id: int) -> PaymentDetail
 
     return PaymentDetailResponse(
         id=payment.id,
+        transfer_pair_id=transfer_pair_id,
         company_bank_account=BankAccountLookupItem(
             id=company_bank_account.id,
             label=(
@@ -331,7 +335,7 @@ async def update_payment(db: AsyncSession, payment_id: int, payload: PaymentCrea
     if payment is None:
         raise PaymentValidationError("Payment not found")
 
-    old_transfer_counterpart = await find_transfer_counterpart(db, payment)
+    old_transfer_counterpart = await get_transfer_counterpart(db, payment)
     resolved = await resolve_payment_payload(db, payload)
 
     validate_financial_breakdown(payload, resolved["amount_eur"])
@@ -375,10 +379,21 @@ async def delete_payment(db: AsyncSession, payment_id: int, *, delete_counterpar
     if payment is None:
         raise PaymentValidationError("Payment not found")
 
-    transfer_counterpart = await find_transfer_counterpart(db, payment) if delete_counterpart else None
-    await delete_payment_record(db, payment)
-    if transfer_counterpart is not None:
+    transfer_counterpart = await get_transfer_counterpart(db, payment)
+    if delete_counterpart and transfer_counterpart is not None:
+        payment.transfer_pair_id = None
+        transfer_counterpart.transfer_pair_id = None
+        await db.flush()
+        await delete_payment_record(db, payment)
         await delete_payment_record(db, transfer_counterpart)
+        return
+
+    if transfer_counterpart is not None:
+        transfer_counterpart.transfer_pair_id = None
+        payment.transfer_pair_id = None
+        await db.flush()
+
+    await delete_payment_record(db, payment)
 
 
 async def delete_payment_record(db: AsyncSession, payment: Payment) -> None:
@@ -435,7 +450,28 @@ async def create_payments_batch(db: AsyncSession, payloads: list[PaymentCreateRe
             )
         except PaymentValidationError as exc:
             raise PaymentValidationError(f"Row {index}: {exc}") from exc
+
+    link_explicit_transfer_pairs(payloads, payments)
+    await db.flush()
     return payments
+
+
+def link_explicit_transfer_pairs(payloads: list[PaymentCreateRequest], payments: list[Payment]) -> None:
+    linked_indices: set[int] = set()
+    for left_index, left_payload in enumerate(payloads):
+        if left_index in linked_indices:
+            continue
+        for right_index in range(left_index + 1, len(payloads)):
+            if right_index in linked_indices:
+                continue
+            if not payloads_are_transfer_counterparts(left_payload, payloads[right_index]):
+                continue
+            left_payment = payments[left_index]
+            right_payment = payments[right_index]
+            left_payment.transfer_pair_id = right_payment.id
+            right_payment.transfer_pair_id = left_payment.id
+            linked_indices.update({left_index, right_index})
+            break
 
 
 def has_explicit_transfer_counterpart(payloads: list[PaymentCreateRequest], payload_index: int) -> bool:
@@ -516,7 +552,21 @@ def _nullable_payment_field_equals(column, value):
     return column.is_(None) if value is None else column == value
 
 
-async def find_transfer_counterpart(db: AsyncSession, payment: Payment) -> Payment | None:
+async def get_transfer_counterpart(db: AsyncSession, payment: Payment) -> Payment | None:
+    if payment.transfer_pair_id is None:
+        return None
+
+    counterpart = await db.get(Payment, payment.transfer_pair_id)
+    if counterpart is None:
+        payment.transfer_pair_id = None
+        await db.flush()
+        return None
+    if counterpart.transfer_pair_id != payment.id:
+        raise PaymentValidationError("Transfer pair link is inconsistent")
+    return counterpart
+
+
+async def find_legacy_transfer_counterpart(db: AsyncSession, payment: Payment) -> Payment | None:
     if payment.related_company_id is None or payment.client_id is not None or payment.counterparty_id is not None:
         return None
 
@@ -524,6 +574,7 @@ async def find_transfer_counterpart(db: AsyncSession, payment: Payment) -> Payme
         select(Payment)
         .where(
             Payment.id != payment.id,
+            Payment.transfer_pair_id.is_(None),
             Payment.company_id == payment.related_company_id,
             Payment.related_company_id == payment.company_id,
             Payment.client_id.is_(None),
@@ -538,42 +589,6 @@ async def find_transfer_counterpart(db: AsyncSession, payment: Payment) -> Payme
             case((_nullable_payment_field_equals(Payment.booking_date, payment.booking_date), 0), else_=1),
             case((_nullable_payment_field_equals(Payment.value_date, payment.value_date), 0), else_=1),
             case((_nullable_payment_field_equals(Payment.transaction_date, payment.transaction_date), 0), else_=1),
-            func.abs(Payment.id - payment.id).asc(),
-        )
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
-async def find_transfer_counterpart_for_payload(
-    db: AsyncSession,
-    *,
-    payment: Payment,
-    payload: PaymentCreateRequest,
-    resolved: dict,
-) -> Payment | None:
-    target_account = resolved.get("related_company_bank_account")
-    if target_account is None:
-        return None
-
-    result = await db.execute(
-        select(Payment)
-        .where(
-            Payment.id != payment.id,
-            Payment.company_id == target_account.company_id,
-            Payment.company_bank_account_id == target_account.id,
-            Payment.related_company_id == resolved["company"].id,
-            Payment.client_id.is_(None),
-            Payment.counterparty_id.is_(None),
-            Payment.payment_kind == PaymentKind.EXPENSE,
-            Payment.payment_direction == _opposite_payment_direction(payload.payment_direction),
-            Payment.currency_code == resolved["currency_code"],
-        )
-        .order_by(
-            case((Payment.amount_original == payload.amount_original, 0), else_=1),
-            case((_nullable_payment_field_equals(Payment.booking_date, payload.booking_date), 0), else_=1),
-            case((_nullable_payment_field_equals(Payment.value_date, payload.value_date), 0), else_=1),
-            case((_nullable_payment_field_equals(Payment.transaction_date, payload.transaction_date), 0), else_=1),
             func.abs(Payment.id - payment.id).asc(),
         )
         .limit(1)
@@ -605,13 +620,6 @@ async def sync_transfer_counterpart(
 
     counterpart = old_transfer_counterpart
     if counterpart is None:
-        counterpart = await find_transfer_counterpart_for_payload(
-            db,
-            payment=payment,
-            payload=payload,
-            resolved=resolved,
-        )
-    if counterpart is None:
         counterpart = Payment(status=PaymentStatus.PENDING_REVIEW, is_manual=True)
         db.add(counterpart)
 
@@ -637,6 +645,9 @@ async def sync_transfer_counterpart(
     counterpart.status = PaymentStatus.PENDING_REVIEW
     counterpart.is_manual = True
 
+    await db.flush()
+    payment.transfer_pair_id = counterpart.id
+    counterpart.transfer_pair_id = payment.id
     await db.flush()
     await upsert_transfer_counterpart_breakdown(db, counterpart)
     await delete_payment_attachments(db, counterpart.id)

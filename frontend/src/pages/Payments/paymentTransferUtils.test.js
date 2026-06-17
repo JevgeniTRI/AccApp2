@@ -87,13 +87,13 @@ test('isAccountTransferRow does not mark same-account or client rows as transfer
 })
 
 
-test('hasTransferCounterpart detects payment detail with counterpart bank account', () => {
+test('hasTransferCounterpart requires an explicit transfer pair link', () => {
   assert.equal(
-    hasTransferCounterpart({ related_company: { id: 42, bank_account_id: 2 } }),
+    hasTransferCounterpart({ transfer_pair_id: 20, related_company: { id: 42, bank_account_id: 2 } }),
     true,
   )
   assert.equal(
-    hasTransferCounterpart({ related_company: { id: 42, bank_account_id: null } }),
+    hasTransferCounterpart({ transfer_pair_id: null, related_company: { id: 42, bank_account_id: 2 } }),
     false,
   )
 })

@@ -13,8 +13,10 @@ from app.services.payments import (
     delete_payment,
     create_payments_batch,
     PaymentValidationError,
+    get_transfer_counterpart,
     has_explicit_transfer_counterpart,
     is_company_transfer_payload,
+    link_explicit_transfer_pairs,
     payloads_are_transfer_counterparts,
     resolve_payment_payload,
     sync_transfer_counterpart,
@@ -169,7 +171,6 @@ class PaymentTransferServiceTests(IsolatedAsyncioTestCase):
         }
 
         with (
-            patch("app.services.payments.find_transfer_counterpart_for_payload", new=AsyncMock(return_value=None)),
             patch("app.services.payments.upsert_transfer_counterpart_breakdown", new=AsyncMock()),
             patch("app.services.payments.delete_payment_attachments", new=AsyncMock()),
         ):
@@ -194,51 +195,75 @@ class PaymentTransferServiceTests(IsolatedAsyncioTestCase):
         payload = make_payload()
         counterpart = make_counterpart_payload()
 
-        with patch("app.services.payments.create_payment", new=AsyncMock(side_effect=["left", "right"])) as create_mock:
-            payments = await create_payments_batch(SimpleNamespace(), [payload, counterpart])
+        left = SimpleNamespace(id=1, transfer_pair_id=None)
+        right = SimpleNamespace(id=2, transfer_pair_id=None)
+        db = SimpleNamespace(flush=AsyncMock())
 
-        assert payments == ["left", "right"]
+        with patch("app.services.payments.create_payment", new=AsyncMock(side_effect=[left, right])) as create_mock:
+            payments = await create_payments_batch(db, [payload, counterpart])
+
+        assert payments == [left, right]
+        assert left.transfer_pair_id == 2
+        assert right.transfer_pair_id == 1
+        db.flush.assert_awaited_once()
         assert create_mock.await_args_list[0].kwargs["sync_counterpart"] is False
         assert create_mock.await_args_list[1].kwargs["sync_counterpart"] is False
 
     async def test_create_payments_batch_auto_syncs_unpaired_transfer_payload(self):
         payload = make_payload()
 
-        with patch("app.services.payments.create_payment", new=AsyncMock(return_value="payment")) as create_mock:
-            payments = await create_payments_batch(SimpleNamespace(), [payload])
+        payment = SimpleNamespace(id=1, transfer_pair_id=None)
+        db = SimpleNamespace(flush=AsyncMock())
 
-        assert payments == ["payment"]
+        with patch("app.services.payments.create_payment", new=AsyncMock(return_value=payment)) as create_mock:
+            payments = await create_payments_batch(db, [payload])
+
+        assert payments == [payment]
+        assert payment.transfer_pair_id is None
+        db.flush.assert_awaited_once()
         assert create_mock.await_args.kwargs["sync_counterpart"] is True
 
     async def test_delete_payment_can_delete_transfer_counterpart(self):
-        db = SimpleNamespace(get=AsyncMock())
-        payment = SimpleNamespace(id=10)
-        counterpart = SimpleNamespace(id=20)
-        db.get.return_value = payment
+        payment = SimpleNamespace(id=10, transfer_pair_id=20)
+        counterpart = SimpleNamespace(id=20, transfer_pair_id=10)
+        db = SimpleNamespace(get=AsyncMock(side_effect=[payment, counterpart]), flush=AsyncMock())
 
-        with (
-            patch("app.services.payments.find_transfer_counterpart", new=AsyncMock(return_value=counterpart)) as find_counterpart,
-            patch("app.services.payments.delete_payment_record", new=AsyncMock()) as delete_record,
-        ):
+        with patch("app.services.payments.delete_payment_record", new=AsyncMock()) as delete_record:
             await delete_payment(db, 10, delete_counterpart=True)
 
-        find_counterpart.assert_awaited_once_with(db, payment)
+        assert payment.transfer_pair_id is None
+        assert counterpart.transfer_pair_id is None
         assert delete_record.await_args_list[0].args == (db, payment)
         assert delete_record.await_args_list[1].args == (db, counterpart)
 
     async def test_delete_payment_keeps_transfer_counterpart_by_default(self):
-        db = SimpleNamespace(get=AsyncMock())
-        payment = SimpleNamespace(id=10)
-        db.get.return_value = payment
+        payment = SimpleNamespace(id=10, transfer_pair_id=20)
+        counterpart = SimpleNamespace(id=20, transfer_pair_id=10)
+        db = SimpleNamespace(get=AsyncMock(side_effect=[payment, counterpart]), flush=AsyncMock())
 
-        with (
-            patch("app.services.payments.find_transfer_counterpart", new=AsyncMock()) as find_counterpart,
-            patch("app.services.payments.delete_payment_record", new=AsyncMock()) as delete_record,
-        ):
+        with patch("app.services.payments.delete_payment_record", new=AsyncMock()) as delete_record:
             await delete_payment(db, 10)
 
-        find_counterpart.assert_not_awaited()
+        assert payment.transfer_pair_id is None
+        assert counterpart.transfer_pair_id is None
         delete_record.assert_awaited_once_with(db, payment)
+
+    async def test_get_transfer_counterpart_rejects_inconsistent_link(self):
+        payment = SimpleNamespace(id=10, transfer_pair_id=20)
+        counterpart = SimpleNamespace(id=20, transfer_pair_id=None)
+        db = SimpleNamespace(get=AsyncMock(return_value=counterpart))
+
+        with self.assertRaises(PaymentValidationError):
+            await get_transfer_counterpart(db, payment)
+
+    def test_link_explicit_transfer_pairs_sets_bidirectional_ids(self):
+        left = SimpleNamespace(id=10, transfer_pair_id=None)
+        right = SimpleNamespace(id=20, transfer_pair_id=None)
+
+        link_explicit_transfer_pairs([make_payload(), make_counterpart_payload()], [left, right])
+
+        assert left.transfer_pair_id == 20
+        assert right.transfer_pair_id == 10
 
 
 if __name__ == "__main__":

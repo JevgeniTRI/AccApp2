@@ -15,6 +15,7 @@ const CounterpartiesPage = lazy(() => import('./pages/Counterparties/Counterpart
 const CounterpartyCreatePage = lazy(() => import('./pages/Counterparties/CounterpartyCreatePage'))
 const AddPaymentsPage = lazy(() => import('./pages/Payments/AddPaymentsPage'))
 const PaymentsPage = lazy(() => import('./pages/Payments/PaymentsPage'))
+const AdminPage = lazy(() => import('./pages/Admin/AdminPage'))
 
 function PlaceholderPage({ title }) {
   return (
@@ -26,6 +27,40 @@ function PlaceholderPage({ title }) {
       </div>
     </section>
   )
+}
+
+function NoAccessPage() {
+  return (
+    <section className="placeholder-page">
+      <div className="placeholder-page__card">
+        <span className="placeholder-page__eyebrow">Нет доступа</span>
+        <h1>Доступ не назначен</h1>
+        <p>Администратор может открыть нужные вкладки в разделе Админ.</p>
+      </div>
+    </section>
+  )
+}
+
+const tabPaths = {
+  dashboard: '/',
+  payments: '/payments',
+  companies: '/companies',
+  banks: '/banks',
+  clients: '/clients',
+  counterparties: '/counterparties',
+  admin: '/admin',
+}
+
+function canOpenTab(user, tab) {
+  return Boolean(user?.is_superuser || user?.tab_permissions?.includes(tab))
+}
+
+function getDefaultPath(user) {
+  if (canOpenTab(user, 'dashboard')) {
+    return '/'
+  }
+  const firstTab = user?.tab_permissions?.find((tab) => tabPaths[tab])
+  return firstTab ? tabPaths[firstTab] : '/no-access'
 }
 
 function App() {
@@ -81,31 +116,37 @@ function App() {
     return <LoginPage onLogin={handleLogin} isLoading={authState.isSubmitting} />
   }
 
+  function requireTab(tab, element) {
+    return canOpenTab(authState.user, tab) ? element : <Navigate to={getDefaultPath(authState.user)} replace />
+  }
+
   return (
     <div className="app-shell">
       <Navbar user={authState.user} onLogout={handleLogout} />
       <main className="app-main">
         <Suspense fallback={<div className="auth-loading">Загружаем раздел...</div>}>
           <Routes>
-            <Route path="/" element={<PlaceholderPage title="Главная" />} />
-            <Route path="/payments" element={<PaymentsPage />} />
-            <Route path="/payments/new" element={<AddPaymentsPage />} />
-            <Route path="/payments/:paymentId/edit" element={<AddPaymentsPage />} />
-            <Route path="/companies" element={<CompaniesPage />} />
-            <Route path="/companies/new" element={<CompanyCreatePage />} />
-            <Route path="/companies/:companyId/edit" element={<CompanyCreatePage />} />
-            <Route path="/banks" element={<BanksPage />} />
-            <Route path="/banks/new-bank" element={<BankCreatePage />} />
-            <Route path="/banks/bank/:bankId/edit" element={<BankCreatePage />} />
-            <Route path="/banks/new" element={<BankAccountCreatePage />} />
-            <Route path="/banks/:bankAccountId/edit" element={<BankAccountCreatePage />} />
-            <Route path="/clients" element={<ClientsPage />} />
-            <Route path="/clients/new" element={<ClientCreatePage />} />
-            <Route path="/clients/:clientId/edit" element={<ClientCreatePage />} />
-            <Route path="/counterparties" element={<CounterpartiesPage />} />
-            <Route path="/counterparties/new" element={<CounterpartyCreatePage />} />
-            <Route path="/counterparties/:counterpartyId/edit" element={<CounterpartyCreatePage />} />
-            <Route path="*" element={<Navigate to="/payments" replace />} />
+            <Route path="/" element={requireTab('dashboard', <PlaceholderPage title="Главная" />)} />
+            <Route path="/payments" element={requireTab('payments', <PaymentsPage />)} />
+            <Route path="/payments/new" element={requireTab('payments', <AddPaymentsPage />)} />
+            <Route path="/payments/:paymentId/edit" element={requireTab('payments', <AddPaymentsPage />)} />
+            <Route path="/companies" element={requireTab('companies', <CompaniesPage />)} />
+            <Route path="/companies/new" element={requireTab('companies', <CompanyCreatePage />)} />
+            <Route path="/companies/:companyId/edit" element={requireTab('companies', <CompanyCreatePage />)} />
+            <Route path="/banks" element={requireTab('banks', <BanksPage />)} />
+            <Route path="/banks/new-bank" element={requireTab('banks', <BankCreatePage />)} />
+            <Route path="/banks/bank/:bankId/edit" element={requireTab('banks', <BankCreatePage />)} />
+            <Route path="/banks/new" element={requireTab('banks', <BankAccountCreatePage />)} />
+            <Route path="/banks/:bankAccountId/edit" element={requireTab('banks', <BankAccountCreatePage />)} />
+            <Route path="/clients" element={requireTab('clients', <ClientsPage />)} />
+            <Route path="/clients/new" element={requireTab('clients', <ClientCreatePage />)} />
+            <Route path="/clients/:clientId/edit" element={requireTab('clients', <ClientCreatePage />)} />
+            <Route path="/counterparties" element={requireTab('counterparties', <CounterpartiesPage />)} />
+            <Route path="/counterparties/new" element={requireTab('counterparties', <CounterpartyCreatePage />)} />
+            <Route path="/counterparties/:counterpartyId/edit" element={requireTab('counterparties', <CounterpartyCreatePage />)} />
+            <Route path="/admin" element={requireTab('admin', <AdminPage currentUser={authState.user} />)} />
+            <Route path="/no-access" element={<NoAccessPage />} />
+            <Route path="*" element={<Navigate to={getDefaultPath(authState.user)} replace />} />
           </Routes>
         </Suspense>
       </main>

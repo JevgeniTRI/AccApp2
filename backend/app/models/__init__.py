@@ -7,7 +7,7 @@ from app.models.accounting import (
     PaymentSettlementRuleSnapshot,
 )
 from app.models.banking import BankStatement, BankStatementLine, ExchangeRate, Payment, PaymentAttachment
-from app.models.auth import User
+from app.models.auth import User, UserTabPermission
 from app.models.reference import (
     Bank,
     Client,
@@ -40,4 +40,5 @@ __all__ = [
     "PaymentFinancialBreakdown",
     "PaymentSettlementRuleSnapshot",
     "User",
+    "UserTabPermission",
 ]

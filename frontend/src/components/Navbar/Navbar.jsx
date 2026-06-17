@@ -3,13 +3,18 @@ import { LogOut, RefreshCcwDot, UserCircle2 } from 'lucide-react'
 import './Navbar.css'
 
 const navItems = [
-  { path: '/', label: 'Главная' },
-  { path: '/payments', label: 'Платежи' },
-  { path: '/companies', label: 'Компании' },
-  { path: '/banks', label: 'Банки' },
-  { path: '/clients', label: 'Клиенты' },
-  { path: '/counterparties', label: 'Контрагенты' },
+  { path: '/', label: 'Главная', tab: 'dashboard' },
+  { path: '/payments', label: 'Платежи', tab: 'payments' },
+  { path: '/companies', label: 'Компании', tab: 'companies' },
+  { path: '/banks', label: 'Банки', tab: 'banks' },
+  { path: '/clients', label: 'Клиенты', tab: 'clients' },
+  { path: '/counterparties', label: 'Контрагенты', tab: 'counterparties' },
+  { path: '/admin', label: 'Админ', tab: 'admin' },
 ]
+
+function canOpenTab(user, tab) {
+  return Boolean(user?.is_superuser || user?.tab_permissions?.includes(tab))
+}
 
 export default function Navbar({ user, onLogout }) {
   return (
@@ -21,7 +26,7 @@ export default function Navbar({ user, onLogout }) {
           </NavLink>
 
           <nav className="navbar__nav" aria-label="Основная навигация">
-            {navItems.map((item) => (
+            {navItems.filter((item) => canOpenTab(user, item.tab)).map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}

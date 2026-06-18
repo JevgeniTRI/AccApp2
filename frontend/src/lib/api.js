@@ -191,6 +191,13 @@ export async function updateClient(clientId, payload) {
   return data
 }
 
+export async function updateClientInterestRate(clientId, interestRatePercent) {
+  const { data } = await api.patch(`/clients/${clientId}/interest-rate`, {
+    interest_rate_percent: interestRatePercent,
+  })
+  return data
+}
+
 export async function deleteClient(clientId) {
   await api.delete(`/clients/${clientId}`)
 }

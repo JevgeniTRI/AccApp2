@@ -17,6 +17,7 @@ from app.schemas.reference import (
     BankResponse,
     ClientCreateRequest,
     ClientOverviewItem,
+    ClientInterestRateUpdateRequest,
     ClientResponse,
     CounterpartyCreateRequest,
     CounterpartyDetailResponse,
@@ -62,6 +63,7 @@ from app.services.reference import (
     search_counterparties,
     search_currencies,
     update_client,
+    update_client_interest_rate,
     update_bank,
     update_bank_account,
     update_company,
@@ -356,6 +358,7 @@ async def post_client(payload: ClientCreateRequest, db: AsyncSession = Depends(g
         first_name=client.first_name,
         last_name=client.last_name,
         middle_name=client.middle_name,
+        interest_rate_percent=client.interest_rate_percent,
     )
 
 
@@ -398,6 +401,33 @@ async def put_client(
         first_name=client.first_name,
         last_name=client.last_name,
         middle_name=client.middle_name,
+        interest_rate_percent=client.interest_rate_percent,
+    )
+
+
+@router.patch("/clients/{client_id}/interest-rate", response_model=ClientResponse)
+async def patch_client_interest_rate(
+    client_id: int,
+    payload: ClientInterestRateUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+) -> ClientResponse:
+    try:
+        client = await update_client_interest_rate(db, client_id, payload)
+        await db.commit()
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SQLAlchemyError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update client interest rate") from exc
+
+    return ClientResponse(
+        id=client.id,
+        full_name=client.full_name,
+        first_name=client.first_name,
+        last_name=client.last_name,
+        middle_name=client.middle_name,
+        interest_rate_percent=client.interest_rate_percent,
     )
 
 

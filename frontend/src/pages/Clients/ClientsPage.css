@@ -43,6 +43,75 @@
   white-space: nowrap;
 }
 
+.clients-table__interest {
+  width: 170px;
+}
+
+.clients-table__interest-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.clients-table__interest-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  width: 106px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(126, 139, 168, 0.34);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.clients-table__interest-input-wrap:focus-within {
+  border-color: #2964ff;
+  outline: 3px solid rgba(41, 100, 255, 0.12);
+}
+
+.clients-table__interest-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  color: var(--text-main);
+  font: inherit;
+  font-weight: 700;
+  text-align: right;
+  background: transparent;
+  outline: 0;
+}
+
+.clients-table__interest-input-wrap span {
+  flex: 0 0 auto;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.clients-table__interest-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(126, 139, 168, 0.34);
+  border-radius: 8px;
+  color: #2964ff;
+  background: #fff;
+  cursor: pointer;
+}
+
+.clients-table__interest-save:hover:not(:disabled) {
+  border-color: rgba(41, 100, 255, 0.42);
+  background: rgba(41, 100, 255, 0.08);
+}
+
+.clients-table__interest-save:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
 .clients-status-chip {
   display: inline-flex;
   align-items: center;
@@ -115,14 +184,18 @@
   }
 
   .clients-table td:nth-child(3)::before {
-    content: 'Баланс';
+    content: 'Проценты %';
   }
 
   .clients-table td:nth-child(4)::before {
-    content: 'Статус';
+    content: 'Баланс';
   }
 
   .clients-table td:nth-child(5)::before {
+    content: 'Статус';
+  }
+
+  .clients-table td:nth-child(6)::before {
     content: 'Действия';
   }
 }

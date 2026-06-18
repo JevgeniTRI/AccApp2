@@ -20,9 +20,23 @@ function createInitialState() {
     addressLine2: '',
     city: '',
     postalCode: '',
+    interestRatePercent: '',
     notes: '',
     status: 'active',
   }
+}
+
+function normalizePercentInput(value) {
+  const text = String(value || '').trim()
+  if (!text) {
+    return null
+  }
+
+  const parsed = Number(text.replace(',', '.'))
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+    throw new Error('Проценты должны быть числом от 0 до 100')
+  }
+  return parsed
 }
 
 export default function ClientCreatePage() {
@@ -74,6 +88,7 @@ export default function ClientCreatePage() {
           addressLine2: client.address_line2 || '',
           city: client.city || '',
           postalCode: client.postal_code || '',
+          interestRatePercent: client.interest_rate_percent ?? '',
           notes: client.notes || '',
           status: client.status || 'active',
         })
@@ -162,6 +177,7 @@ export default function ClientCreatePage() {
         address_line2: formState.addressLine2.trim() || null,
         city: formState.city.trim() || null,
         postal_code: formState.postalCode.trim() || null,
+        interest_rate_percent: normalizePercentInput(formState.interestRatePercent),
         notes: formState.notes.trim() || null,
         status: formState.status.trim() || 'active',
       }
@@ -266,6 +282,18 @@ export default function ClientCreatePage() {
                   value={formState.status}
                   onChange={(event) => updateField('status', event.target.value)}
                   placeholder="active"
+                />
+              </label>
+              <label className="client-create-field">
+                <span>Проценты %</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={formState.interestRatePercent}
+                  onChange={(event) => updateField('interestRatePercent', event.target.value)}
+                  placeholder="8"
                 />
               </label>
             </div>

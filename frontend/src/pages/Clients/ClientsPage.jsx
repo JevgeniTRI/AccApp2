@@ -3,6 +3,7 @@ import {
   Filter,
   Plus,
   RefreshCw,
+  Save,
   Search,
   SlidersHorizontal,
 } from 'lucide-react'
@@ -21,7 +22,7 @@ import {
   TableWrap,
   Toolbar,
 } from '../../components/ui'
-import { deleteClient, fetchClientsOverview } from '../../lib/api'
+import { deleteClient, fetchClientsOverview, updateClientInterestRate } from '../../lib/api'
 import './ClientsPage.css'
 
 function EmptyState({ search }) {
@@ -51,6 +52,24 @@ function formatClientBalanceItem(item) {
   }
 }
 
+function formatPercentValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return ''
+  }
+
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? String(numericValue) : ''
+}
+
+function getSavedInterestValue(client) {
+  return formatPercentValue(client.interest_rate_percent)
+}
+
+function normalizeInterestValue(value) {
+  const rawValue = String(value ?? '').trim()
+  return rawValue ? Number(rawValue.replace(',', '.')) : null
+}
+
 function formatClientBalances(accountBalances) {
   const balances = (accountBalances || []).filter((item) => Number(item.balance || 0) !== 0)
   const visibleBalances = balances.length > 0 ? balances : accountBalances || []
@@ -70,6 +89,8 @@ export default function ClientsPage() {
     success: '',
     error: '',
   })
+  const [interestInputs, setInterestInputs] = useState({})
+  const [savingInterestClientId, setSavingInterestClientId] = useState(null)
   const [state, setState] = useState({
     isLoading: true,
     error: '',
@@ -120,9 +141,18 @@ export default function ClientsPage() {
     [state.items],
   )
 
+  useEffect(() => {
+    setInterestInputs(
+      Object.fromEntries(
+        state.items.map((client) => [client.id, formatPercentValue(client.interest_rate_percent)]),
+      ),
+    )
+  }, [state.items])
+
   async function handleCopyClient(client) {
     const text = [
       `ФИО: ${client.full_name}`,
+      `Проценты: ${getSavedInterestValue(client) ? `${getSavedInterestValue(client)}%` : '-'}`,
       `Баланс: ${formatClientBalances(client.account_balances)}`,
       `Статус: ${client.status || '-'}`,
     ].join('\n')
@@ -143,6 +173,49 @@ export default function ClientsPage() {
 
   function handleEditClient(clientId) {
     navigate(`/clients/${clientId}/edit`)
+  }
+
+  function updateInterestInput(clientId, value) {
+    setInterestInputs((current) => ({
+      ...current,
+      [clientId]: value,
+    }))
+  }
+
+  async function saveInterestRate(client) {
+    const rawValue = String(interestInputs[client.id] ?? '').trim()
+    const nextValue = normalizeInterestValue(rawValue)
+    const currentValue = normalizeInterestValue(getSavedInterestValue(client))
+
+    if (nextValue !== null && (!Number.isFinite(nextValue) || nextValue < 0 || nextValue > 100)) {
+      setActionState({
+        success: '',
+        error: 'Проценты должны быть числом от 0 до 100',
+      })
+      updateInterestInput(client.id, formatPercentValue(client.interest_rate_percent))
+      return
+    }
+    if ((nextValue ?? null) === (Number.isFinite(currentValue) ? currentValue : null)) {
+      return
+    }
+
+    setSavingInterestClientId(client.id)
+    try {
+      await updateClientInterestRate(client.id, nextValue)
+      setActionState({
+        success: 'Проценты сохранены',
+        error: '',
+      })
+      setRefreshKey((current) => current + 1)
+    } catch (error) {
+      setActionState({
+        success: '',
+        error: error.response?.data?.detail || 'Не удалось сохранить проценты',
+      })
+      updateInterestInput(client.id, formatPercentValue(client.interest_rate_percent))
+    } finally {
+      setSavingInterestClientId(null)
+    }
   }
 
   async function handleDeleteClient(client) {
@@ -218,35 +291,78 @@ export default function ClientsPage() {
                   <tr>
                     <th />
                     <th>ФИО</th>
+                    <th>Проценты %</th>
                     <th>Баланс</th>
                     <th>Статус</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
-                  {state.items.map((client) => (
-                    <tr key={client.id}>
-                      <td className="clients-table__checkbox">
-                        <input type="checkbox" />
-                      </td>
-                      <td className="clients-table__name">{client.full_name}</td>
-                      <td className="clients-table__balance">{formatClientBalances(client.account_balances)}</td>
-                      <td>
-                        <span className={`clients-status-chip ${client.status ? 'is-filled' : ''}`}>
-                          {client.status || '-'}
-                        </span>
-                      </td>
-                      <td>
-                        <RowActions
-                          actions={[
-                            { kind: 'copy', label: 'Копировать', onClick: () => handleCopyClient(client) },
-                            { kind: 'edit', label: 'Редактировать', onClick: () => handleEditClient(client.id) },
-                            { kind: 'delete', label: 'Удалить', onClick: () => handleDeleteClient(client) },
-                          ]}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  {state.items.map((client) => {
+                    const currentInput = interestInputs[client.id] ?? ''
+                    const savedInput = getSavedInterestValue(client)
+                    const isInterestDirty = currentInput !== savedInput
+                    const isSavingInterest = savingInterestClientId === client.id
+
+                    return (
+                      <tr key={client.id}>
+                        <td className="clients-table__checkbox">
+                          <input type="checkbox" />
+                        </td>
+                        <td className="clients-table__name">{client.full_name}</td>
+                        <td className="clients-table__interest">
+                          <div className="clients-table__interest-control">
+                            <div className="clients-table__interest-input-wrap">
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                value={currentInput}
+                                disabled={isSavingInterest}
+                                onChange={(event) => updateInterestInput(client.id, event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' && isInterestDirty) {
+                                    saveInterestRate(client)
+                                  }
+                                }}
+                                placeholder="-"
+                                aria-label={`Проценты для ${client.full_name}`}
+                              />
+                              {currentInput ? <span>%</span> : null}
+                            </div>
+                            {isInterestDirty ? (
+                              <button
+                                type="button"
+                                className="clients-table__interest-save"
+                                onClick={() => saveInterestRate(client)}
+                                disabled={isSavingInterest}
+                                aria-label={`Сохранить проценты для ${client.full_name}`}
+                                title="Сохранить проценты"
+                              >
+                                <Save size={14} />
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="clients-table__balance">{formatClientBalances(client.account_balances)}</td>
+                        <td>
+                          <span className={`clients-status-chip ${client.status ? 'is-filled' : ''}`}>
+                            {client.status || '-'}
+                          </span>
+                        </td>
+                        <td>
+                          <RowActions
+                            actions={[
+                              { kind: 'copy', label: 'Копировать', onClick: () => handleCopyClient(client) },
+                              { kind: 'edit', label: 'Редактировать', onClick: () => handleEditClient(client.id) },
+                              { kind: 'delete', label: 'Удалить', onClick: () => handleDeleteClient(client) },
+                            ]}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             )}

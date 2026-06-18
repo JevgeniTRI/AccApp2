@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -107,6 +108,7 @@ class Client(BigIntPrimaryKeyMixin, TimestampMixin, Base):
     address_line2: Mapped[str | None] = mapped_column(String(255))
     city: Mapped[str | None] = mapped_column(String(128))
     postal_code: Mapped[str | None] = mapped_column(String(32))
+    interest_rate_percent: Mapped[Decimal | None] = mapped_column(Numeric(7, 4))
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str | None] = mapped_column(String(32))
 

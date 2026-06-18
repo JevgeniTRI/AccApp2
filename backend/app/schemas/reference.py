@@ -254,8 +254,13 @@ class ClientCreateRequest(BaseModel):
     address_line2: str | None = Field(default=None, max_length=255)
     city: str | None = Field(default=None, max_length=128)
     postal_code: str | None = Field(default=None, max_length=32)
+    interest_rate_percent: Decimal | None = Field(default=None, ge=0, le=100)
     notes: str | None = None
     status: str | None = Field(default="active", max_length=32)
+
+
+class ClientInterestRateUpdateRequest(BaseModel):
+    interest_rate_percent: Decimal | None = Field(default=None, ge=0, le=100)
 
 
 class ClientResponse(BaseModel):
@@ -264,6 +269,7 @@ class ClientResponse(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     middle_name: str | None = None
+    interest_rate_percent: Decimal | None = None
 
 
 class ClientAccountBalanceItem(BaseModel):
@@ -281,6 +287,7 @@ class ClientOverviewItem(BaseModel):
     email: str | None = None
     phone: str | None = None
     city: str | None = None
+    interest_rate_percent: Decimal | None = None
     status: str | None = None
     account_balances: list[ClientAccountBalanceItem] = Field(default_factory=list)
 
@@ -301,6 +308,7 @@ class ClientDetailResponse(BaseModel):
     address_line2: str | None = None
     city: str | None = None
     postal_code: str | None = None
+    interest_rate_percent: Decimal | None = None
     notes: str | None = None
     status: str | None = None
 

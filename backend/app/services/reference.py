@@ -19,6 +19,7 @@ from app.schemas.reference import (
     BankResponse,
     ClientCreateRequest,
     ClientDetailResponse,
+    ClientInterestRateUpdateRequest,
     ClientOverviewItem,
     CounterpartyCreateRequest,
     CounterpartyDetailResponse,
@@ -826,6 +827,7 @@ async def create_client(db: AsyncSession, payload: ClientCreateRequest) -> Clien
         address_line2=payload.address_line2.strip() if payload.address_line2 else None,
         city=payload.city.strip() if payload.city else None,
         postal_code=payload.postal_code.strip() if payload.postal_code else None,
+        interest_rate_percent=payload.interest_rate_percent,
         notes=payload.notes.strip() if payload.notes else None,
         status=payload.status.strip() if payload.status else "active",
     )
@@ -898,6 +900,7 @@ async def list_client_overview(
             email=client.email,
             phone=client.phone,
             city=client.city,
+            interest_rate_percent=client.interest_rate_percent,
             status=client.status,
             account_balances=balances_by_client.get(client.id, []),
         )
@@ -926,6 +929,7 @@ async def get_client_detail(db: AsyncSession, client_id: int) -> ClientDetailRes
         address_line2=client.address_line2,
         city=client.city,
         postal_code=client.postal_code,
+        interest_rate_percent=client.interest_rate_percent,
         notes=client.notes,
         status=client.status,
     )
@@ -952,9 +956,24 @@ async def update_client(db: AsyncSession, client_id: int, payload: ClientCreateR
     client.address_line2 = payload.address_line2.strip() if payload.address_line2 else None
     client.city = payload.city.strip() if payload.city else None
     client.postal_code = payload.postal_code.strip() if payload.postal_code else None
+    client.interest_rate_percent = payload.interest_rate_percent
     client.notes = payload.notes.strip() if payload.notes else None
     client.status = payload.status.strip() if payload.status else "active"
 
+    await db.flush()
+    return client
+
+
+async def update_client_interest_rate(
+    db: AsyncSession,
+    client_id: int,
+    payload: ClientInterestRateUpdateRequest,
+) -> Client:
+    client = await db.get(Client, client_id)
+    if client is None:
+        raise ValueError("Client not found")
+
+    client.interest_rate_percent = payload.interest_rate_percent
     await db.flush()
     return client
 

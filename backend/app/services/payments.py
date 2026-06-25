@@ -4,7 +4,7 @@ import base64
 import binascii
 from collections import defaultdict
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,7 @@ from sqlalchemy.orm import aliased
 
 from app.models.accounting import PaymentFinancialBreakdown
 from app.models.accounting import ClientBalanceLedger, LedgerEntry, LedgerPosting, PaymentSettlementRuleSnapshot
-from app.models.banking import Payment, PaymentAttachment
+from app.models.banking import ExchangeRate, Payment, PaymentAttachment
 from app.models.enums import PaymentDirection, PaymentKind, PaymentStatus
 from app.models.reference import Bank, Client, Company, CompanyBankAccount, CompanyClient, Counterparty
 from app.schemas.payments import PaymentCreateRequest, PaymentDetailResponse, PaymentPartySummary
@@ -20,10 +20,17 @@ from app.schemas.reference import BankAccountLookupItem
 from app.services.reference import format_bank_display_name, format_company_display_name
 
 MAX_PAYMENT_ATTACHMENT_BYTES = 10 * 1024 * 1024
+EUR_CODE = "EUR"
+RUB_CODE = "RUB"
+MONEY_SCALE = Decimal("0.01")
 
 
 class PaymentValidationError(Exception):
     pass
+
+
+def quantize_money(value: Decimal) -> Decimal:
+    return value.quantize(MONEY_SCALE, rounding=ROUND_HALF_UP)
 
 
 async def list_payments(
@@ -186,7 +193,7 @@ async def create_payment(db: AsyncSession, payload: PaymentCreateRequest, *, syn
         transaction_date=payload.transaction_date,
         amount_original=payload.amount_original,
         currency_code=resolved["currency_code"],
-        exchange_rate_id=payload.exchange_rate_id,
+        exchange_rate_id=resolved.get("exchange_rate_id"),
         exchange_rate_manual=payload.exchange_rate_manual,
         amount_eur=resolved["amount_eur"],
         payment_reference=payload.payment_reference,
@@ -353,7 +360,7 @@ async def update_payment(db: AsyncSession, payment_id: int, payload: PaymentCrea
     payment.transaction_date = payload.transaction_date
     payment.amount_original = payload.amount_original
     payment.currency_code = resolved["currency_code"]
-    payment.exchange_rate_id = payload.exchange_rate_id
+    payment.exchange_rate_id = resolved.get("exchange_rate_id")
     payment.exchange_rate_manual = payload.exchange_rate_manual
     payment.amount_eur = resolved["amount_eur"]
     payment.payment_reference = payload.payment_reference
@@ -514,9 +521,10 @@ async def get_bank_account_balance(db: AsyncSession, company_bank_account_id: in
     if company_bank_account is None:
         raise PaymentValidationError("Company bank account not found")
 
+    balance_amount = Payment.amount_eur if company_bank_account.currency_code == EUR_CODE else Payment.amount_original
     incoming_total = (
         await db.execute(
-            select(func.coalesce(func.sum(Payment.amount_original), 0)).where(
+            select(func.coalesce(func.sum(balance_amount), 0)).where(
                 Payment.company_bank_account_id == company_bank_account_id,
                 Payment.payment_direction == PaymentDirection.INCOMING,
             )
@@ -524,7 +532,7 @@ async def get_bank_account_balance(db: AsyncSession, company_bank_account_id: in
     ).scalar_one()
     outgoing_total = (
         await db.execute(
-            select(func.coalesce(func.sum(Payment.amount_original), 0)).where(
+            select(func.coalesce(func.sum(balance_amount), 0)).where(
                 Payment.company_bank_account_id == company_bank_account_id,
                 Payment.payment_direction == PaymentDirection.OUTGOING,
             )
@@ -636,7 +644,7 @@ async def sync_transfer_counterpart(
     counterpart.transaction_date = payload.transaction_date
     counterpart.amount_original = payload.amount_original
     counterpart.currency_code = resolved["currency_code"]
-    counterpart.exchange_rate_id = payload.exchange_rate_id
+    counterpart.exchange_rate_id = resolved.get("exchange_rate_id")
     counterpart.exchange_rate_manual = payload.exchange_rate_manual
     counterpart.amount_eur = resolved["amount_eur"]
     counterpart.payment_reference = payload.payment_reference
@@ -691,6 +699,87 @@ async def delete_payment_attachments(db: AsyncSession, payment_id: int) -> None:
     for attachment in attachments_result.scalars().all():
         await db.delete(attachment)
     await db.flush()
+
+
+async def get_exchange_rate(
+    db: AsyncSession,
+    *,
+    from_currency_code: str,
+    to_currency_code: str,
+    rate_date: date,
+) -> ExchangeRate | None:
+    result = await db.execute(
+        select(ExchangeRate)
+        .where(
+            ExchangeRate.from_currency_code == from_currency_code,
+            ExchangeRate.to_currency_code == to_currency_code,
+            ExchangeRate.rate_date == rate_date,
+        )
+        .order_by(ExchangeRate.is_manual.desc(), ExchangeRate.id.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def resolve_amount_eur(
+    db: AsyncSession,
+    *,
+    amount_original: Decimal,
+    currency_code: str,
+    booking_date: date,
+    manual_rate: Decimal | None = None,
+) -> tuple[Decimal, int | None]:
+    if currency_code == EUR_CODE:
+        return quantize_money(amount_original), None
+
+    if manual_rate is not None:
+        if manual_rate <= 0:
+            raise PaymentValidationError("exchange_rate_manual must be greater than zero")
+        return quantize_money(amount_original * manual_rate), None
+
+    direct_rate = await get_exchange_rate(
+        db,
+        from_currency_code=currency_code,
+        to_currency_code=EUR_CODE,
+        rate_date=booking_date,
+    )
+    if direct_rate is not None:
+        return quantize_money(amount_original * direct_rate.rate_value), direct_rate.id
+
+    inverse_rate = await get_exchange_rate(
+        db,
+        from_currency_code=EUR_CODE,
+        to_currency_code=currency_code,
+        rate_date=booking_date,
+    )
+    if inverse_rate is not None:
+        return quantize_money(amount_original / inverse_rate.rate_value), inverse_rate.id
+
+    eur_to_rub_rate = await get_exchange_rate(
+        db,
+        from_currency_code=EUR_CODE,
+        to_currency_code=RUB_CODE,
+        rate_date=booking_date,
+    )
+    if eur_to_rub_rate is None:
+        raise PaymentValidationError(f"EUR/RUB exchange rate is missing for {booking_date.isoformat()}")
+
+    if currency_code == RUB_CODE:
+        return quantize_money(amount_original / eur_to_rub_rate.rate_value), eur_to_rub_rate.id
+
+    currency_to_rub_rate = await get_exchange_rate(
+        db,
+        from_currency_code=currency_code,
+        to_currency_code=RUB_CODE,
+        rate_date=booking_date,
+    )
+    if currency_to_rub_rate is None:
+        raise PaymentValidationError(
+            f"{currency_code}/RUB exchange rate is missing for {booking_date.isoformat()}"
+        )
+
+    amount_rub = amount_original * currency_to_rub_rate.rate_value
+    return quantize_money(amount_rub / eur_to_rub_rate.rate_value), currency_to_rub_rate.id
 
 
 async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateRequest) -> dict:
@@ -773,12 +862,13 @@ async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateReques
             counterparty = await get_or_create_counterparty(db, None, counterparty_name)
             counterparty_name = get_counterparty_display_name(counterparty)
 
-    amount_eur = payload.amount_eur
-    if amount_eur is None:
-        if currency_code == "EUR":
-            amount_eur = payload.amount_original
-        else:
-            raise PaymentValidationError("amount_eur is required for non-EUR payments")
+    amount_eur, exchange_rate_id = await resolve_amount_eur(
+        db,
+        amount_original=payload.amount_original,
+        currency_code=currency_code,
+        booking_date=payload.booking_date,
+        manual_rate=payload.exchange_rate_manual,
+    )
 
     return {
         "company_bank_account": company_bank_account,
@@ -792,6 +882,7 @@ async def resolve_payment_payload(db: AsyncSession, payload: PaymentCreateReques
         "counterparty_name": counterparty_name,
         "payment_kind": payment_kind,
         "amount_eur": amount_eur,
+        "exchange_rate_id": payload.exchange_rate_id or exchange_rate_id,
     }
 
 

@@ -18,6 +18,7 @@ from app.services.payments import (
     is_company_transfer_payload,
     link_explicit_transfer_pairs,
     payloads_are_transfer_counterparts,
+    resolve_amount_eur,
     resolve_payment_payload,
     sync_transfer_counterpart,
 )
@@ -105,6 +106,66 @@ class PaymentTransferPayloadTests(TestCase):
             make_payload(client_id=5),
             make_counterpart_payload(client_id=5),
         )
+
+
+class FakeScalarResult:
+    def __init__(self, value):
+        self.value = value
+
+    def scalar_one_or_none(self):
+        return self.value
+
+
+class FakeRateDb:
+    def __init__(self, rates):
+        self.rates = list(rates)
+
+    async def execute(self, stmt):
+        return FakeScalarResult(self.rates.pop(0))
+
+
+class PaymentExchangeRateTests(IsolatedAsyncioTestCase):
+    async def test_resolve_amount_eur_converts_rub_using_booking_date_rate(self):
+        db = FakeRateDb([None, SimpleNamespace(id=7, rate_value=Decimal("100.00000000"))])
+
+        amount_eur, exchange_rate_id = await resolve_amount_eur(
+            db,
+            amount_original=Decimal("250.00"),
+            currency_code="RUB",
+            booking_date=date(2026, 4, 14),
+        )
+
+        assert amount_eur == Decimal("2.50")
+        assert exchange_rate_id == 7
+
+    async def test_resolve_amount_eur_converts_usd_through_rub_rates(self):
+        db = FakeRateDb([
+            None,
+            None,
+            SimpleNamespace(id=11, rate_value=Decimal("100.00000000")),
+            SimpleNamespace(id=12, rate_value=Decimal("90.00000000")),
+        ])
+
+        amount_eur, exchange_rate_id = await resolve_amount_eur(
+            db,
+            amount_original=Decimal("10.00"),
+            currency_code="USD",
+            booking_date=date(2026, 4, 16),
+        )
+
+        assert amount_eur == Decimal("9.00")
+        assert exchange_rate_id == 12
+
+    async def test_resolve_amount_eur_requires_rate_for_payment_date(self):
+        db = FakeRateDb([None, None, None])
+
+        with self.assertRaises(PaymentValidationError):
+            await resolve_amount_eur(
+                db,
+                amount_original=Decimal("10.00"),
+                currency_code="USD",
+                booking_date=date(2026, 4, 16),
+            )
 
 
 class PaymentTransferServiceTests(IsolatedAsyncioTestCase):

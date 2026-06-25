@@ -394,13 +394,23 @@ async def list_bank_account_overview(
                 func.coalesce(
                     func.sum(
                         case(
-                            (Payment.payment_direction == PaymentDirection.INCOMING, Payment.amount_original),
-                            else_=-Payment.amount_original,
+                            (
+                                Payment.payment_direction == PaymentDirection.INCOMING,
+                                case(
+                                    (CompanyBankAccount.currency_code == "EUR", Payment.amount_eur),
+                                    else_=Payment.amount_original,
+                                ),
+                            ),
+                            else_=-case(
+                                (CompanyBankAccount.currency_code == "EUR", Payment.amount_eur),
+                                else_=Payment.amount_original,
+                            ),
                         )
                     ),
                     0,
                 ).label("balance"),
             )
+            .join(CompanyBankAccount, CompanyBankAccount.id == Payment.company_bank_account_id)
             .where(Payment.company_bank_account_id.in_(account_ids))
             .group_by(Payment.company_bank_account_id)
         )

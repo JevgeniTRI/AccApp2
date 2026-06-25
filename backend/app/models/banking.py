@@ -102,8 +102,7 @@ class ExchangeRate(BigIntPrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    # The shared design references this table but does not list its columns.
-    # These fields are inferred from the stated FX requirements.
+
     from_currency_code: Mapped[str] = mapped_column(ForeignKey("currencies.code"), nullable=False)
     to_currency_code: Mapped[str] = mapped_column(ForeignKey("currencies.code"), nullable=False)
     rate_date: Mapped[date] = mapped_column(Date, nullable=False)

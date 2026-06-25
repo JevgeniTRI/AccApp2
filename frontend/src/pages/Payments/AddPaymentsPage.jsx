@@ -756,7 +756,7 @@ export default function AddPaymentsPage() {
           items.push({
             ...basePaymentItem,
             company_bank_account_id: bankAccount.value,
-            amount_eur: rowCurrency === 'EUR' ? null : Math.abs(amount),
+            amount_eur: null,
             vat_amount_eur: 0,
             own_expense_amount_eur: 0,
             company_commission_amount_eur: 0,
@@ -767,7 +767,7 @@ export default function AddPaymentsPage() {
           items.push({
             ...basePaymentItem,
             company_bank_account_id: relatedCompany.bankAccountId,
-            amount_eur: rowCurrency === 'EUR' ? null : Math.abs(amount),
+            amount_eur: null,
             vat_amount_eur: 0,
             own_expense_amount_eur: 0,
             company_commission_amount_eur: 0,
@@ -784,7 +784,7 @@ export default function AddPaymentsPage() {
         items.push({
           ...basePaymentItem,
           company_bank_account_id: bankAccount.value,
-          amount_eur: rowCurrency === 'EUR' ? null : Math.abs(amount),
+          amount_eur: null,
           payment_direction: amount >= 0 ? 'incoming' : 'outgoing',
           related_company_id: relatedCompany?.value ?? null,
           related_company_bank_account_id: isTransferRow ? relatedCompany.bankAccountId : null,
